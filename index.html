@@ -59,9 +59,13 @@
                     <label for="task-title" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">제목</label>
                     <input type="text" id="task-title" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="예: 3분기 실적 보고서">
                 </div>
-                 <div class="mb-6">
+                 <div class="mb-4">
                     <label for="task-url" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">URL</label>
                     <input type="url" id="task-url" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="https://example.com">
+                </div>
+                <div class="mb-6">
+                    <label for="task-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">날짜</label>
+                    <input type="date" id="task-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md hover:bg-indigo-700 transition-colors">저장</button>
@@ -124,7 +128,15 @@
         const currentYear = new Date().getFullYear();
         let docIdToDelete = null;
         
-        const openModal = () => elements.taskModal.classList.remove('hidden');
+        // 추가하기 모달 열기 함수 (날짜 기본값 설정 추가)
+        const openModal = () => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            document.getElementById('task-date').value = `${year}-${month}-${day}`;
+            elements.taskModal.classList.remove('hidden');
+        };
         const closeModal = () => {
             elements.taskModal.classList.add('hidden');
             elements.taskForm.reset();
@@ -135,14 +147,14 @@
             if (e.target === elements.taskModal) closeModal();
         });
 
+        // 업무 추가 로직 (날짜 필드에서 값 가져오기)
         elements.taskForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const title = document.getElementById('task-title').value;
             const url = document.getElementById('task-url').value;
-            const today = new Date();
-            const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const date = document.getElementById('task-date').value;
 
-            if (!title || !url) return alert('제목과 URL을 모두 입력해주세요.');
+            if (!title || !url || !date) return alert('모든 필드를 입력해주세요.');
             closeModal();
 
             const collRef = collection(db, 'artifacts', appId, 'public', 'data', 'work-pages');

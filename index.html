@@ -72,9 +72,20 @@
                     <label for="task-url" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">URL</label>
                     <input type="url" id="task-url" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="https://example.com">
                 </div>
-                <div class="mb-6">
-                    <label for="task-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">날짜</label>
-                    <input type="date" id="task-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="task-name" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">담당자</label>
+                        <select id="task-name" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                            <option value="Aiden Kim">Aiden Kim</option>
+                            <option value="Matthew Kim">Matthew Kim</option>
+                            <option value="Kai Kim">Kai Kim</option>
+                            <option value="Trey Song">Trey Song</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="task-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">날짜</label>
+                        <input type="date" id="task-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md hover:bg-indigo-700 transition-colors">저장</button>
@@ -143,6 +154,13 @@
         let maxYear = null;
         let yearlyListenerUnsubscribe = null;
 
+        const nameStyles = {
+            "Aiden Kim": { initial: "A", color: "bg-blue-500" },
+            "Matthew Kim": { initial: "M", color: "bg-green-500" },
+            "Kai Kim": { initial: "K", color: "bg-yellow-500" },
+            "Trey Song": { initial: "T", color: "bg-purple-500" }
+        };
+
         const openModal = () => {
             const today = new Date();
             const year = today.getFullYear();
@@ -165,14 +183,15 @@
             e.preventDefault();
             const title = document.getElementById('task-title').value;
             const url = document.getElementById('task-url').value;
+            const name = document.getElementById('task-name').value;
             const date = document.getElementById('task-date').value;
 
-            if (!title || !url || !date) return alert('모든 필드를 입력해주세요.');
+            if (!title || !url || !date || !name) return alert('모든 필드를 입력해주세요.');
             closeModal();
 
             const collRef = collection(db, 'artifacts', appId, 'public', 'data', 'work-pages');
-            addDoc(collRef, { title, url, date, createdAt: serverTimestamp() })
-                .then(() => fetchYearRange()) // 새 데이터 추가 후 연도 범위 갱신
+            addDoc(collRef, { title, url, date, name, createdAt: serverTimestamp() })
+                .then(() => fetchYearRange()) 
                 .catch(err => alert(`저장 실패: ${err.message}`));
         });
 
@@ -189,7 +208,7 @@
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'work-pages', docIdToDelete);
             try {
                 await deleteDoc(docRef);
-                fetchYearRange(); // 데이터 삭제 후 연도 범위 갱신
+                fetchYearRange(); 
                 closeDeleteModal();
             } catch (err) {
                 alert(`삭제 실패: ${err.message}`);
@@ -230,11 +249,15 @@
                     const dateObj = new Date(task.date);
                     const dateStr = `${dateObj.getMonth() + 1}.${dateObj.getDate()}`;
                     const extraClasses = i >= 4 ? 'extra-item hidden' : '';
-                    return `<li class="group flex items-center justify-between p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors ${extraClasses}" data-doc-id="${task.id}"><a href="${task.url}" target="_blank" rel="noopener noreferrer" class="truncate flex-grow"><span class="font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">${task.title}</span></a><div class="flex items-center flex-shrink-0 ml-3"><span class="text-xs font-mono text-gray-400 dark:text-gray-500">${dateStr}</span><button class="delete-btn ml-2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-trash-can fa-xs"></i></button></div></li>`;
+                    const style = nameStyles[task.name] || { initial: "?", color: "bg-gray-400" };
+
+                    return `<li class="group flex items-center justify-between p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors ${extraClasses}" data-doc-id="${task.id}"><a href="${task.url}" target="_blank" rel="noopener noreferrer" class="truncate flex-grow mr-2"><span class="font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">${task.title}</span></a><div class="flex items-center flex-shrink-0 ml-2"><div title="${task.name}" class="w-6 h-6 rounded-full ${style.color} text-white text-xs flex items-center justify-center font-bold mr-2">${style.initial}</div><span class="text-xs font-mono text-gray-400 dark:text-gray-500">${dateStr}</span><button class="delete-btn ml-2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-trash-can fa-xs"></i></button></div></li>`;
                 }).join('');
                 
-                if (monthTasks.length === 0) listItemsHTML = `<li class="p-2 text-center text-sm text-gray-400">업무 내용이 없습니다.</li>`;
-                const cardHTML = `<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col"><div class="p-4 border-b border-gray-200 dark:border-gray-700"><h2 class="text-xl font-bold text-gray-800 dark:text-white">${monthKor} <span class="text-base font-normal text-gray-400">${year}</span></h2></div><div class="p-2 flex-grow"><ul class="space-y-1">${listItemsHTML}</ul></div><div class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl text-right mt-auto ${monthTasks.length <= 4 ? 'hidden' : ''}"><a href="#" class="more-btn text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">더보기 &rarr;</a></div></div>`;
+                // '업무 내용이 없습니다' 메시지 제거
+                if (monthTasks.length === 0) listItemsHTML = '';
+                
+                const cardHTML = `<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col"><div class="p-4 border-b border-gray-200 dark:border-gray-700"><h2 class="text-xl font-bold text-gray-800 dark:text-white">${monthKor}</h2></div><div class="p-2 flex-grow min-h-[80px]"><ul class="space-y-1">${listItemsHTML}</ul></div><div class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl text-right mt-auto ${monthTasks.length <= 4 ? 'hidden' : ''}"><a href="#" class="more-btn text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">더보기 &rarr;</a></div></div>`;
                 elements.container.innerHTML += cardHTML;
             });
         }

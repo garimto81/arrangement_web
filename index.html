@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>연간 업무 현황 보드 (날짜 자동입력)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .extra-item, .modal-backdrop {
+            transition: all 0.3s ease-in-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .loader {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3498db;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+    <div class="container mx-auto p-4 sm:p-6 md:p-8">
+        
+        <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
+            <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
+                <i class="fa-solid fa-chart-line text-indigo-500"></i>
+                <span id="overview-year"></span>
+            </h1>
+            <div class="flex items-center gap-2">
+                 <button id="add-task-btn" class="flex items-center gap-2 bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors shadow">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>추가하기</span>
+                </button>
+                <button id="dark-mode-toggle" class="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 text-gray-600 dark:text-yellow-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors shadow-sm">
+                    <i class="fa-solid fa-sun"></i>
+                </button>
+            </div>
+        </header>
+
+        <div id="monthly-cards-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 min-h-[300px]">
+            <!-- 월별 카드가 여기에 동적으로 생성됩니다. -->
+        </div>
+
+        <footer class="text-center text-sm text-gray-500 mt-10">
+            <p>&copy; <span id="footer-year"></span> Yearly Work Overview. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <!-- 업무 추가 모달 -->
+    <div id="task-modal" class="modal-backdrop fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 animate-fade-in">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-gray-700 dark:text-gray-200">새 업무 추가</h3>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><i class="fa-solid fa-xmark fa-lg"></i></button>
+            </div>
+            <form id="task-form">
+                <div class="mb-4">
+                    <label for="task-title" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">제목</label>
+                    <input type="text" id="task-title" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="예: 3분기 실적 보고서">
+                </div>
+                 <div class="mb-6">
+                    <label for="task-url" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">URL</label>
+                    <input type="url" id="task-url" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" required placeholder="https://example.com">
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md hover:bg-indigo-700 transition-colors">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, where, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase 구성
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "YOUR_API_KEY", projectId: "..." };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // DOM 요소
+        const elements = {
+            container: document.getElementById('monthly-cards-container'),
+            overviewYear: document.getElementById('overview-year'),
+            footerYear: document.getElementById('footer-year'),
+            addTaskBtn: document.getElementById('add-task-btn'),
+            taskModal: document.getElementById('task-modal'),
+            closeModalBtn: document.getElementById('close-modal-btn'),
+            taskForm: document.getElementById('task-form'),
+            darkModeToggle: document.getElementById('dark-mode-toggle'),
+            htmlElement: document.documentElement
+        };
+        const currentYear = new Date().getFullYear();
+        
+        // --- 모달 관리 ---
+        const openModal = () => elements.taskModal.classList.remove('hidden');
+        const closeModal = () => {
+            elements.taskModal.classList.add('hidden');
+            elements.taskForm.reset();
+        };
+        elements.addTaskBtn.addEventListener('click', openModal);
+        elements.closeModalBtn.addEventListener('click', closeModal);
+        elements.taskModal.addEventListener('click', e => {
+            if (e.target === elements.taskModal) closeModal();
+        });
+
+        // --- 업무 추가 로직 ---
+        elements.taskForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('task-title').value;
+            const url = document.getElementById('task-url').value;
+            
+            // 날짜 자동 생성
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
+            const day = String(today.getDate()).padStart(2, '0');
+            const date = `${year}-${month}-${day}`;
+
+            if (!title || !url) {
+                alert('제목과 URL을 모두 입력해주세요.');
+                return;
+            }
+
+            try {
+                const collRef = collection(db, 'artifacts', appId, 'public', 'data', 'work-pages');
+                await addDoc(collRef, {
+                    title: title,
+                    url: url,
+                    date: date,
+                    createdAt: serverTimestamp() 
+                });
+                closeModal();
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                alert('저장에 실패했습니다.');
+            }
+        });
+
+        // --- 데이터 렌더링 (이전과 동일, 일부 수정) ---
+        const months = [
+            "1월", "2월", "3월", "4월", "5월", "6월",
+            "7월", "8월", "9월", "10월", "11월", "12월"
+        ];
+        
+        elements.overviewYear.textContent = `${currentYear}년 연간 업무 현황`;
+        elements.footerYear.textContent = currentYear;
+        
+        function renderLoading() {
+            elements.container.innerHTML = `<div class="col-span-full flex justify-center items-center"><div class="loader"></div></div>`;
+        }
+
+        function renderCards(tasksByMonth) {
+            elements.container.innerHTML = ''; 
+
+            months.forEach((monthKor, index) => {
+                const monthTasks = tasksByMonth[index] || [];
+                monthTasks.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                let listItemsHTML = '';
+                monthTasks.forEach((task, i) => {
+                    const dateObj = new Date(task.date);
+                    const dateStr = `${dateObj.getMonth() + 1}.${dateObj.getDate()}`;
+                    const extraClasses = i >= 4 ? 'extra-item hidden' : '';
+                    listItemsHTML += `<li class="${extraClasses}"><a href="${task.url}" target="_blank" rel="noopener noreferrer" class="group block p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"><div class="flex justify-between items-center"><span class="truncate font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">${task.title}</span><span class="text-xs font-mono text-gray-400 dark:text-gray-500 ml-3">${dateStr}</span></div></a></li>`;
+                });
+                
+                if (monthTasks.length === 0) {
+                     listItemsHTML = `<li class="p-2 text-center text-sm text-gray-400">업무 내용이 없습니다.</li>`;
+                }
+
+                const cardHTML = `<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col"><div class="p-4 border-b border-gray-200 dark:border-gray-700"><h2 class="text-xl font-bold text-gray-800 dark:text-white">${monthKor}</h2></div><div class="p-2 flex-grow"><ul class="space-y-1">${listItemsHTML}</ul></div><div class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl text-right mt-auto ${monthTasks.length <= 4 ? 'hidden' : ''}"><a href="#" class="more-btn text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">더보기 &rarr;</a></div></div>`;
+                elements.container.innerHTML += cardHTML;
+            });
+
+            document.querySelectorAll('.more-btn').forEach(button => {
+                button.addEventListener('click', e => {
+                    e.preventDefault();
+                    const card = button.closest('.flex-col');
+                    card.querySelectorAll('.extra-item').forEach(item => item.classList.toggle('hidden'));
+                    button.innerHTML = button.textContent.includes('더보기') ? '접기 &larr;' : '더보기 &rarr;';
+                });
+            });
+        }
+        
+        function fetchTasks(userId) {
+            renderLoading();
+            const collRef = collection(db, 'artifacts', appId, 'public', 'data', 'work-pages');
+            const q = query(collRef, where("date", ">=", `${currentYear}-01-01`), where("date", "<=", `${currentYear}-12-31`));
+
+            onSnapshot(q, (snapshot) => {
+                const tasksByMonth = {};
+                snapshot.forEach(doc => {
+                    const task = doc.data();
+                    const monthIndex = new Date(task.date).getMonth();
+                    if (!tasksByMonth[monthIndex]) tasksByMonth[monthIndex] = [];
+                    tasksByMonth[monthIndex].push(task);
+                });
+                renderCards(tasksByMonth);
+            }, (error) => {
+                console.error("Error fetching tasks: ", error);
+                elements.container.innerHTML = `<div class="col-span-full text-center text-red-500">데이터 로딩 중 오류 발생.</div>`;
+            });
+        }
+        
+        // --- 인증 및 초기 실행 ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) fetchTasks(user.uid);
+            else elements.container.innerHTML = `<div class="col-span-full text-center text-gray-500">인증 중...</div>`;
+        });
+        
+        (async () => {
+             try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+                else await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                elements.container.innerHTML = `<div class="col-span-full text-center text-red-500">인증 실패.</div>`;
+            }
+        })();
+
+        // --- 다크모드 스크립트 ---
+        const initDarkMode = () => {
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                elements.htmlElement.classList.add('dark');
+                elements.darkModeToggle.innerHTML = '<i class="fa-solid fa-moon"></i>';
+            } else {
+                elements.htmlElement.classList.remove('dark');
+                elements.darkModeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
+            }
+        };
+        const toggleDarkMode = () => {
+            elements.htmlElement.classList.toggle('dark');
+            localStorage.theme = elements.htmlElement.classList.contains('dark') ? 'dark' : 'light';
+            initDarkMode();
+        };
+        elements.darkModeToggle.addEventListener('click', toggleDarkMode);
+        initDarkMode();
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if (!('theme' in localStorage)) initDarkMode();
+        });
+    </script>
+</body>
+</html>

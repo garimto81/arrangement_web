@@ -244,7 +244,13 @@
 
             months.forEach((monthKor, index) => {
                 const monthTasks = tasksByMonth[index] || [];
-                monthTasks.sort((a, b) => new Date(a.date) - new Date(b.date));
+                // ** 변경: createdAt 필드를 기준으로 최신순(내림차순)으로 정렬합니다. **
+                monthTasks.sort((a, b) => {
+                    const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
+                    const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
+                    return timeB - timeA;
+                });
+                
                 let listItemsHTML = monthTasks.map((task, i) => {
                     const dateObj = new Date(task.date);
                     const dateStr = `${dateObj.getMonth() + 1}.${dateObj.getDate()}`;
@@ -254,7 +260,6 @@
                     return `<li class="group flex items-center justify-between p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors ${extraClasses}" data-doc-id="${task.id}"><a href="${task.url}" target="_blank" rel="noopener noreferrer" class="truncate flex-grow mr-2"><span class="font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">${task.title}</span></a><div class="flex items-center flex-shrink-0 ml-2"><div title="${task.name}" class="w-6 h-6 rounded-full ${style.color} text-white text-xs flex items-center justify-center font-bold mr-2">${style.initial}</div><span class="text-xs font-mono text-gray-400 dark:text-gray-500">${dateStr}</span><button class="delete-btn ml-2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 dark:text-gray-500 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-trash-can fa-xs"></i></button></div></li>`;
                 }).join('');
                 
-                // '업무 내용이 없습니다' 메시지 제거
                 if (monthTasks.length === 0) listItemsHTML = '';
                 
                 const cardHTML = `<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col"><div class="p-4 border-b border-gray-200 dark:border-gray-700"><h2 class="text-xl font-bold text-gray-800 dark:text-white">${monthKor}</h2></div><div class="p-2 flex-grow min-h-[80px]"><ul class="space-y-1">${listItemsHTML}</ul></div><div class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-b-xl text-right mt-auto ${monthTasks.length <= 4 ? 'hidden' : ''}"><a href="#" class="more-btn text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">더보기 &rarr;</a></div></div>`;

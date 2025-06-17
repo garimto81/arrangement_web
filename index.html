@@ -197,7 +197,7 @@
         };
         
         let db, auth, userId, appId;
-        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), viewMode: 'week' };
+        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), viewMode: 'month' };
 
         try {
             const firebaseConfig = {
@@ -229,7 +229,6 @@
         const renderTimeline = () => {
             const { tasks, categories, viewDate, viewMode } = state;
 
-            // Define date range based on viewMode
             let startDate, endDate;
             if (viewMode === 'week') {
                 startDate = new Date(viewDate);
@@ -237,7 +236,7 @@
                 endDate = new Date(startDate);
                 endDate.setDate(startDate.getDate() + 6);
                 document.getElementById('current-range-display').textContent = `${startDate.toLocaleDateString('ko-KR')} ~ ${endDate.toLocaleDateString('ko-KR')}`;
-            } else { // month view
+            } else { 
                 startDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
                 endDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
                 document.getElementById('current-range-display').textContent = `${viewDate.getFullYear()}년 ${viewDate.getMonth() + 1}월`;
@@ -252,29 +251,29 @@
             
             const timelineGrid = document.createElement('div');
             timelineGrid.className = 'animate-fade-in';
-            if (viewMode === 'month') {
-                 timelineGrid.style.minWidth = `${200 + daysInRange * 40}px`;
-            }
-
-            // Build header
+           
             let headerHtml = `<div class="sticky top-0 z-20 bg-gray-200 dark:bg-gray-700 grid" style="grid-template-columns: 200px 1fr;">`;
             headerHtml += `<div class="font-semibold text-sm p-2 border-r border-b border-gray-300 dark:border-gray-600">업무</div>`;
             headerHtml += `<div class="grid" style="grid-template-columns: repeat(${daysInRange}, minmax(0, 1fr));">`;
             dateArray.forEach(d => {
                 const isToday = formatDate(d) === todayStr;
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                headerHtml += `<div class="text-center p-1 border-b border-l border-gray-300 dark:border-gray-600 ${isToday ? 'bg-indigo-200 dark:bg-indigo-800' : ''}">
-                    <div class="text-xs ${isWeekend ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}">${d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
-                    <div class="font-bold text-sm">${d.getDate()}</div>
+                headerHtml += `<div class="text-center p-1 border-b border-l border-gray-300 dark:border-gray-600 ${isToday ? 'bg-indigo-600 text-white' : ''}">
+                    <div class="text-xs ${isWeekend && !isToday ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}">${viewMode === 'month' && window.innerWidth < 768 ? d.getDate() : d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
+                    <div class="font-bold text-sm ${viewMode === 'month' && window.innerWidth < 768 ? 'hidden' : ''}">${d.getDate()}</div>
                 </div>`;
             });
             headerHtml += `</div></div>`;
             timelineGrid.innerHTML = headerHtml;
 
-            // Build body rows
             categories.forEach(cat => {
                 const categoryTasks = tasks.filter(t => t.category === cat.name).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
                 
+                // If the category is '기본' and has no tasks, skip rendering it.
+                if (cat.name === '기본' && categoryTasks.length === 0) {
+                    return;
+                }
+
                 const categoryRow = document.createElement('div');
                 categoryRow.className = 'grid';
                 categoryRow.style.gridTemplateColumns = '200px 1fr';
@@ -309,7 +308,14 @@
                         }
 
                         const taskStart = new Date(task.startDate + 'T00:00:00');
-                        const taskEnd = task.endDate ? new Date(task.endDate + 'T00:00:00') : new Date(todayStr + 'T00:00:00');
+                        
+                        let taskEnd;
+                        if (task.status === 'completed') {
+                            taskEnd = task.endDate ? new Date(task.endDate + 'T00:00:00') : taskStart;
+                        } else {
+                            taskEnd = new Date(todayStr + 'T00:00:00');
+                        }
+                        
                         const startMs = startDate.getTime();
                         const endMs = endDate.getTime();
 
@@ -367,7 +373,6 @@
              document.getElementById('view-month-btn').classList.toggle('active', state.viewMode === 'month');
         }
 
-        // --- 모달 관리 ---
         const openModal = (modal) => modal.classList.remove('hidden');
         const closeModal = (modal) => modal.classList.add('hidden');
 
@@ -533,9 +538,20 @@
             document.getElementById('confirm-delete-btn').addEventListener('click', handleDeleteConfirmed);
             document.getElementById('add-category-form').addEventListener('submit', handleAddCategoryFormSubmit);
             DOM.taskForm.addEventListener('submit', handleTaskFormSubmit);
-            DOM.taskForm.querySelector('input[name="task-status"]').addEventListener('change', e => {
-                document.getElementById('end-date-wrapper').classList.toggle('hidden', e.target.value !== 'completed');
+
+            DOM.taskForm.querySelectorAll('input[name="task-status"]').forEach(radio => {
+                radio.addEventListener('change', e => {
+                    const isCompleted = e.target.value === 'completed';
+                    document.getElementById('end-date-wrapper').classList.toggle('hidden', !isCompleted);
+                    if (isCompleted) {
+                        const endDateInput = document.getElementById('task-end-date');
+                        if (!endDateInput.value) {
+                            endDateInput.value = formatDate(new Date());
+                        }
+                    }
+                });
             });
+
             DOM.darkModeToggle.addEventListener('click', () => {
                 const html = document.documentElement;
                 html.classList.toggle('dark');

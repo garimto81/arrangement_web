@@ -98,7 +98,7 @@
                     <button id="next-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">다음 &gt;</button>
                 </div>
             </div>
-            <div id="timeline-container" class="overflow-x-auto">
+            <div id="timeline-container" class="overflow-visible">
                  <p class="initial-loading-message text-center text-gray-500 dark:text-gray-400">타임라인 로딩 중...</p>
             </div>
         </div>
@@ -228,6 +228,7 @@
 
         const renderTimeline = () => {
             const { tasks, categories, viewDate, viewMode } = state;
+            const isMobile = window.innerWidth < 768;
 
             let startDate, endDate;
             if (viewMode === 'week') {
@@ -259,8 +260,8 @@
                 const isToday = formatDate(d) === todayStr;
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                 headerHtml += `<div class="text-center p-1 border-b border-l border-gray-300 dark:border-gray-600 ${isToday ? 'bg-indigo-600 text-white' : ''}">
-                    <div class="text-xs ${isWeekend && !isToday ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}">${viewMode === 'month' && window.innerWidth < 768 ? d.getDate() : d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
-                    <div class="font-bold text-sm ${viewMode === 'month' && window.innerWidth < 768 ? 'hidden' : ''}">${d.getDate()}</div>
+                    <div class="text-xs ${isWeekend && !isToday ? 'text-red-500' : isToday ? '' : 'text-gray-500 dark:text-gray-400'}">${(viewMode === 'month' && isMobile) ? d.getDate() : d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
+                    <div class="font-bold text-sm ${viewMode === 'month' && isMobile ? 'hidden' : ''}">${d.getDate()}</div>
                 </div>`;
             });
             headerHtml += `</div></div>`;
@@ -269,7 +270,6 @@
             categories.forEach(cat => {
                 const categoryTasks = tasks.filter(t => t.category === cat.name).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
                 
-                // If the category is '기본' and has no tasks, skip rendering it.
                 if (cat.name === '기본' && categoryTasks.length === 0) {
                     return;
                 }
@@ -302,8 +302,15 @@
                         
                         for(let i=0; i < daysInRange; i++) {
                             const bgCell = document.createElement('div');
+                            const currentDateStr = formatDate(dateArray[i]);
+                            const isToday = currentDateStr === todayStr;
                             const isWeekend = dateArray[i].getDay() === 0 || dateArray[i].getDay() === 6;
-                            bgCell.className = `border-r border-gray-200 dark:border-gray-600/50 ${isWeekend ? 'bg-gray-50 dark:bg-gray-800/40' : ''}`;
+                            
+                            let bgClass = isWeekend ? 'bg-gray-50 dark:bg-gray-800/40' : '';
+                            if (isToday) {
+                                bgClass = 'bg-indigo-100 dark:bg-indigo-900/30';
+                            }
+                            bgCell.className = `border-r border-gray-200 dark:border-gray-600/50 ${bgClass}`;
                             timelineCell.appendChild(bgCell);
                         }
 
@@ -326,7 +333,7 @@
                             const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
 
                             const assignee = ASSIGNEES[task.name] || { i:'?', c: 'bg-gray-500' };
-                            const barColor = task.status === 'completed' ? 'bg-gray-400' : assignee.c;
+                            const barColor = assignee.c;
                             
                             const taskBar = document.createElement('a');
                             taskBar.href = task.url || '#';

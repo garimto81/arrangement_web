@@ -9,11 +9,46 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; }
-        .timeline-body::-webkit-scrollbar { height: 6px; }
-        .timeline-body::-webkit-scrollbar-thumb { background-color: #a3a3a3; border-radius: 10px; }
-        .dark .timeline-body::-webkit-scrollbar-thumb { background-color: #52525b; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        
+        .gantt-task-bar {
+            position: absolute;
+            height: calc(100% - 0.5rem);
+            min-height: 1.75rem;
+            top: 0.25rem;
+            overflow: hidden;
+            border-radius: 0.375rem;
+            padding: 0.25rem 0.5rem;
+            transition: background-color 0.2s;
+            color: white;
+            font-size: 0.8rem;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .gantt-task-bar .task-title {
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .gantt-task-bar .task-actions {
+            position: absolute;
+            top: 50%;
+            right: 0.5rem;
+            transform: translateY(-50%);
+            display: none;
+            gap: 0.25rem;
+            background-color: rgba(0,0,0,0.2);
+            padding: 2px 4px;
+            border-radius: 5px;
+        }
+        .gantt-task-bar:hover .task-actions {
+            display: flex;
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -22,7 +57,7 @@
         
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
-                <i class="fa-solid fa-camera-retro text-indigo-500"></i>
+                <i class="fa-solid fa-chart-gantt text-indigo-500"></i>
                 <span>GGP CAMERA 업무 현황</span>
             </h1>
             <div class="flex items-center gap-2">
@@ -38,43 +73,46 @@
             </div>
         </header>
 
-        <div id="timeline-section" class="mb-8">
-            <h2 class="text-2xl font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-calendar-week"></i>업무 스케줄</h2>
-            <div id="timeline-container" class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-lg overflow-hidden min-h-[100px]">
-                <p class="text-center text-gray-500">데이터 로딩 중...</p>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
+            <div id="gantt-controls" class="flex items-center justify-between mb-4">
+                <h2 id="current-month-year" class="text-xl font-bold text-gray-700 dark:text-gray-200"></h2>
+                <div class="flex items-center gap-2">
+                    <button id="prev-month-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">&lt; 이전</button>
+                    <button id="today-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">오늘</button>
+                    <button id="next-month-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">다음 &gt;</button>
+                </div>
             </div>
-        </div>
-        
-        <div id="category-board-container" class="space-y-8">
-             <p class="text-center text-gray-500">데이터 로딩 중...</p>
+            <div id="gantt-chart-container" class="overflow-visible">
+                 <p class="initial-loading-message text-center text-gray-500 dark:text-gray-400">간트 차트 로딩 중...</p>
+            </div>
         </div>
 
     </div>
 
-    <!-- Modals -->
-    <div id="task-modal" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-40 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 animate-fade-in">
+    <!-- Modals (unchanged) -->
+    <div id="task-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6" onclick="event.stopPropagation()">
             <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6"></h3>
             <form id="task-form">
                 <input type="hidden" id="task-id"><input type="hidden" id="task-source">
                 <div class="mb-4">
                     <label for="task-category" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">카테고리</label>
-                    <select id="task-category" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600" required></select>
+                    <select id="task-category" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500" required></select>
                 </div>
                 <div class="mb-4">
                     <label for="task-title" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">제목</label>
-                    <input type="text" id="task-title" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" required>
+                    <input type="text" id="task-title" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600" required>
                 </div>
                 <div class="mb-4">
                     <label for="task-url" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">URL</label>
                     <input type="url" id="task-url" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" placeholder="https://...">
                 </div>
                 <div class="grid grid-cols-2 gap-4 mb-4">
-                     <div>
+                      <div>
                         <label for="task-name" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">담당자</label>
                         <select id="task-name" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" required></select>
-                     </div>
-                     <div>
+                      </div>
+                      <div>
                         <label for="task-start-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">시작일</label>
                         <input type="date" id="task-start-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" required>
                     </div>
@@ -82,13 +120,13 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">상태</label>
                     <div class="flex items-center gap-8">
-                        <label class="flex items-center gap-2"><input type="radio" name="task-status" value="inProgress" checked>진행 중</label>
-                        <label class="flex items-center gap-2"><input type="radio" name="task-status" value="completed">완료</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="task-status" value="inProgress" class="text-indigo-600" checked>진행 중</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="task-status" value="completed" class="text-indigo-600">완료</label>
                     </div>
                 </div>
                 <div id="end-date-wrapper" class="mt-4 mb-6 hidden">
-                     <label for="task-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">완료일</label>
-                     <input type="date" id="task-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700">
+                      <label for="task-end-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">완료일</label>
+                      <input type="date" id="task-end-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700">
                 </div>
                 <div class="flex justify-end gap-3 mt-8">
                     <button type="button" class="close-modal-btn px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">취소</button>
@@ -98,22 +136,22 @@
         </div>
     </div>
     
-    <div id="category-modal" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 animate-fade-in">
+    <div id="category-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6" onclick="event.stopPropagation()">
             <h3 class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6">카테고리 관리</h3>
-            <div id="category-list" class="space-y-2 mb-6 max-h-60 overflow-y-auto"></div>
+            <div id="category-list" class="space-y-2 mb-6 max-h-60 overflow-y-auto pr-2"></div>
             <form id="add-category-form" class="flex gap-2">
                 <input type="text" id="new-category-name" class="flex-grow px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" placeholder="새 카테고리 이름" required>
                 <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md">추가</button>
             </form>
-             <div class="flex justify-end mt-8">
-                 <button type="button" class="close-modal-btn px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">닫기</button>
+            <div class="flex justify-end mt-8">
+                <button type="button" class="close-modal-btn px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">닫기</button>
             </div>
         </div>
     </div>
 
-    <div id="delete-confirm-modal" class="fixed inset-0 bg-black/40 flex items-center justify-center hidden z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6 animate-fade-in">
+    <div id="delete-confirm-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6" onclick="event.stopPropagation()">
             <h3 id="delete-confirm-title" class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2"></h3>
             <p id="delete-confirm-message" class="text-gray-600 dark:text-gray-300 mb-6"></p>
             <div class="flex justify-end gap-3">
@@ -125,216 +163,385 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, enableIndexedDbPersistence, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, enableIndexedDbPersistence, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const elements = {
-            board: document.getElementById('category-board-container'),
-            timelineContainer: document.getElementById('timeline-container'),
+        const ASSIGNEES = { 
+            "Aiden Kim": {i:"A", c:"bg-blue-500"}, "Matthew Kim": {i:"M", c:"bg-green-500"}, 
+            "Kai Kim": {i:"K", c:"bg-yellow-500"}, "Trey Song": {i:"T", c:"bg-purple-500"} 
+        };
+        const DOM = {
+            ganttChart: document.getElementById('gantt-chart-container'),
             taskModal: document.getElementById('task-modal'),
             categoryModal: document.getElementById('category-modal'),
-            deleteConfirmModal: document.getElementById('delete-confirm-modal'),
+            deleteModal: document.getElementById('delete-confirm-modal'),
+            taskForm: document.getElementById('task-form'),
+            categoryList: document.getElementById('category-list'),
+            darkModeToggle: document.getElementById('dark-mode-toggle'),
         };
-
-        function displayError(message, details = '', linkUrl = null, linkText = '', rules = null) {
-            let rulesHTML = '';
-            if (rules) {
-                rulesHTML = `<pre class="mt-4 text-left bg-gray-800 text-white p-3 rounded-md text-xs overflow-x-auto"><code>${rules.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>`;
-            }
-            const errorHTML = `<div class="p-6 text-center bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg col-span-full"><h3 class="font-bold text-xl mb-2">${message}</h3><p>${details}</p>${rulesHTML}${linkUrl ? `<a href="${linkUrl}" target="_blank" rel="noopener" class="mt-4 inline-block bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">${linkText}</a>` : ''}</div>`;
-            elements.board.innerHTML = errorHTML;
-            elements.timelineContainer.innerHTML = '';
-        }
-
-        let db, auth, appId;
-        let firebaseConfig;
+        
+        let db, auth, userId, appId;
+        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date() };
 
         try {
-            firebaseConfig = {
-                apiKey: "AIzaSyD6LVOtT0x30CQNZDt5aSUEBKT8vXPhM6k",
-                authDomain: "ggp-camera.firebaseapp.com",
-                projectId: "ggp-camera",
-                storageBucket: "ggp-camera.firebasestorage.app",
-                messagingSenderId: "906682771595",
-                appId: "1:906682771595:web:431b539435f4a0ca294c8e",
-                measurementId: "G-JLR9TMLSS1"
+            const firebaseConfig = {
+              apiKey: "AIzaSyD6LVOtT0x30CQNZDt5aSUEBKT8vXPhM6k",
+              authDomain: "ggp-camera.firebaseapp.com",
+              projectId: "ggp-camera",
+              storageBucket: "ggp-camera.appspot.com",
+              messagingSenderId: "906682771595",
+              appId: "1:906682771595:web:431b539435f4a0ca294c8e",
+              measurementId: "G-JLR9TMLSS1"
             };
-            
-            if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-                 throw new Error("Firebase 설정이 필요합니다. 코드의 firebaseConfig 객체를 실제 프로젝트 값으로 교체해주세요.");
-            }
 
+            if (!firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("YOUR_")) {
+                throw new Error("유효한 Firebase 설정이 필요합니다.");
+            }
+            appId = firebaseConfig.appId;
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            getAnalytics(app);
-            appId = firebaseConfig.appId;
             enableIndexedDbPersistence(db).catch(console.warn);
 
         } catch (error) {
             console.error("Firebase 초기화 실패:", error);
-            displayError(error.message, 'Firebase 설정(firebaseConfig)이 올바른지 확인해주세요.', 'https://console.firebase.google.com/', 'Firebase 콘솔로 이동');
+            document.body.innerHTML = `<div class="fixed inset-0 bg-red-100 text-red-800 flex items-center justify-center p-4 text-center"><p>${error.message}</p></div>`;
         }
 
-        if (auth && db) {
-            const ASSIGNEES = { "Aiden Kim": {i:"A", c:"bg-blue-500"}, "Matthew Kim": {i:"M", c:"bg-green-500"}, "Kai Kim": {i:"K", c:"bg-yellow-500"}, "Trey Song": {i:"T", c:"bg-purple-500"} };
-            let categories = [];
-            let allTasks = [];
-            let itemToDelete = { id: null, type: null, source: null };
+        const formatDate = (date) => date.toISOString().split('T')[0];
 
-            const uiElements = {
-                taskModalTitle: document.getElementById('task-modal-title'),
-                taskForm: document.getElementById('task-form'),
-                taskIdInput: document.getElementById('task-id'),
-                taskSourceInput: document.getElementById('task-source'),
-                taskCategorySelect: document.getElementById('task-category'),
-                taskNameSelect: document.getElementById('task-name'),
-                endDateWrapper: document.getElementById('end-date-wrapper'),
-                categoryList: document.getElementById('category-list'),
-                addCategoryForm: document.getElementById('add-category-form'),
-                deleteConfirmTitle: document.getElementById('delete-confirm-title'),
-                deleteConfirmMessage: document.getElementById('delete-confirm-message'),
-            };
-
-            function populateAssignees() { /* ... (이전과 동일) ... */ }
-            function openTaskModal(task = null) { /* ... (이전과 동일) ... */ }
-            function openCategoryModal() { /* ... (이전과 동일) ... */ }
-            function openDeleteConfirmModal(id, type, source) { /* ... (이전과 동일) ... */ }
+        const renderGanttChart = () => {
+            const { tasks, categories, viewDate } = state;
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
             
-            async function handleTaskFormSubmit(e) { /* ... (이전과 동일) ... */ }
-            async function handleAddCategoryFormSubmit(e) { /* ... (이전과 동일) ... */ }
-            async function handleDeleteConfirmed() { /* ... (이전과 동일) ... */ }
+            document.getElementById('current-month-year').textContent = `${year}년 ${month + 1}월`;
 
-            function renderTimeline(tasks) { /* ... (이전과 동일) ... */ }
-            function renderBoard(categories, allTasks) {
-                elements.board.innerHTML = '';
-                const tasksByCategory = categories.reduce((acc, category) => ({ ...acc, [category.name]: [] }), {});
+            const startDateOfMonth = new Date(year, month, 1);
+            const endDateOfMonth = new Date(year, month + 1, 0);
+            const daysInMonth = endDateOfMonth.getDate();
 
-                allTasks.forEach(task => {
-                    const categoryName = task.category || '기본';
-                    if(tasksByCategory[categoryName]) {
-                        tasksByCategory[categoryName].push(task);
-                    }
-                });
-
-                categories.forEach(category => {
-                    const section = document.createElement('div');
-                    section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow';
-                    const taskListId = `task-list-${category.id}`;
-                    section.innerHTML = `<div class="flex justify-between items-center p-4 border-b dark:border-gray-700"><h2 class="font-bold text-lg">${category.name}</h2><button class="delete-category-btn text-gray-400 hover:text-red-500" data-id="${category.id}"><i class="fa-solid fa-trash-can fa-sm"></i></button></div><ul id="${taskListId}" class="p-4 space-y-3"></ul>`;
-                    
-                    const taskListEl = section.querySelector(`#${taskListId}`);
-                    const sortedTasks = tasksByCategory[category.name].sort((a,b) => (b.createdAt?.toMillis() || new Date(b.date || 0).getTime()) - (a.createdAt?.toMillis() || new Date(a.date || 0).getTime()));
-                    
-                    if (sortedTasks.length === 0) {
-                        taskListEl.innerHTML = `<li class="text-center text-sm text-gray-500 py-4">업무가 없습니다.</li>`;
-                    } else {
-                        sortedTasks.forEach(task => {
-                            const taskEl = document.createElement('li');
-                            taskEl.className = 'bg-gray-50 dark:bg-gray-700 rounded-md p-3 group';
-                            taskEl.dataset.id = task.id;
-                            taskEl.dataset.source = task.source;
-                            const style = ASSIGNEES[task.name] || {i:"?", c:"bg-gray-400"};
-                            const statusHTML = task.status === 'inProgress' ? `<span class="text-xs font-bold text-blue-500">진행 중</span>` : `<span class="text-xs font-mono text-gray-400 dark:text-gray-500">${new Date(task.endDate).getMonth()+1}.${new Date(task.endDate).getDate()} 완료</span>`;
-
-                            taskEl.innerHTML = `<div class="flex justify-between items-start"><a href="${task.url || '#'}" target="_blank" class="font-semibold text-gray-800 dark:text-gray-200 mb-2 flex-grow">${task.title}</a><div class="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-2"><button class="edit-task-btn text-gray-400 hover:text-blue-500 p-1"><i class="fa-solid fa-pencil fa-sm"></i></button><button class="delete-task-btn text-gray-400 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can fa-sm"></i></button></div></div><div class="flex items-center gap-2 mt-2"><div title="${task.name}" class="w-6 h-6 rounded-full ${style.c} text-white text-xs flex items-center justify-center font-bold">${style.i}</div>${statusHTML}</div>`;
-                            taskListEl.appendChild(taskEl);
-                        });
-                    }
-                    elements.board.appendChild(section);
-                });
+            const dateArray = [];
+            for (let d = new Date(startDateOfMonth); d <= endDateOfMonth; d.setDate(d.getDate() + 1)) {
+                dateArray.push(new Date(d));
             }
             
-            function renderCategoryList(categories) { /* ... (이전과 동일) ... */ }
-            async function initializeDefaultCategories() { /* ... (이전과 동일) ... */ }
+            const todayStr = formatDate(new Date());
 
-            function handleFirestoreError(error, source = '데이터') {
-                 if (error.code === 'permission-denied') {
-                    const securityRules = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // 새 업무 보드 데이터 경로
-    match /tasks/{taskId} { allow read, write: if request.auth != null; }
-    // 카테고리 데이터 경로
-    match /categories/{categoryId} { allow read, write: if request.auth != null; }
-    // 기존 데이터 경로
-    match /artifacts/{appId}/public/data/work-pages/{docId} { allow read, write: if request.auth != null; }
-  }
-}`;
-                    displayError('설정 필요: 데이터베이스 권한 없음', 
-                    `Firestore 보안 규칙이 '${source}' 읽기를 허용하지 않습니다. Firestore 규칙 편집기에서 내용을 아래의 통합 규칙으로 교체하고 게시해주세요.`,
-                    `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/rules`,
-                    'Firestore 규칙 편집기로 이동',
-                    securityRules
-                    );
+            // Build header
+            let headerHtml = `<div class="sticky top-0 z-20 bg-gray-200 dark:bg-gray-700 grid" style="grid-template-columns: 200px 1fr;">`;
+            headerHtml += `<div class="font-semibold text-sm p-2 border-r border-b border-gray-300 dark:border-gray-600">업무</div>`;
+            headerHtml += `<div class="grid" style="grid-template-columns: repeat(${daysInMonth}, minmax(0, 1fr));">`;
+            dateArray.forEach(d => {
+                const isToday = formatDate(d) === todayStr;
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                headerHtml += `<div class="text-center p-1 border-b border-l border-gray-300 dark:border-gray-600 ${isToday ? 'bg-indigo-200 dark:bg-indigo-800' : ''}">
+                    <div class="text-xs ${isWeekend ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}">${d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
+                    <div class="font-bold text-sm">${d.getDate()}</div>
+                </div>`;
+            });
+            headerHtml += `</div></div>`;
+
+            // Build body rows
+            let bodyHtml = '';
+            
+            categories.forEach(cat => {
+                const categoryTasks = tasks.filter(t => t.category === cat.name).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
+                
+                // Category header row
+                bodyHtml += `<div class="grid" style="grid-template-columns: 200px 1fr;">`;
+                bodyHtml += `<div class="sticky left-0 bg-gray-100 dark:bg-gray-700/80 font-bold p-2 text-sm border-b border-r border-gray-300 dark:border-gray-600 col-span-2">${cat.name}</div>`;
+                bodyHtml += `</div>`;
+                
+                if (categoryTasks.length > 0) {
+                    categoryTasks.forEach(task => {
+                        bodyHtml += `<div class="grid" style="grid-template-columns: 200px 1fr;">`;
+                        // Task title cell
+                        bodyHtml += `<div class="sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-center text-sm">
+                                        <a href="${task.url || '#'}" target="_blank" class="truncate" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
+                                     </div>`;
+                        // Task timeline cell (container for bar and background)
+                        bodyHtml += `<div class="relative border-b border-gray-200 dark:border-gray-600/50 grid" style="grid-template-columns: repeat(${daysInMonth}, minmax(0, 1fr));">`;
+                        
+                        // Background cells
+                        for(let i=0; i < dateArray.length; i++) {
+                            const isWeekend = dateArray[i].getDay() === 0 || dateArray[i].getDay() === 6;
+                            bodyHtml += `<div class="border-r border-gray-200 dark:border-gray-600/50 ${isWeekend ? 'bg-gray-50 dark:bg-gray-800/40' : ''}"></div>`;
+                        }
+
+                        // Calculate and create task bar
+                        const taskStart = new Date(task.startDate + 'T00:00:00');
+                        const taskEnd = task.endDate ? new Date(task.endDate + 'T00:00:00') : new Date(todayStr + 'T00:00:00');
+                        
+                        const startMs = startDateOfMonth.getTime();
+                        const endMs = endDateOfMonth.getTime();
+
+                        if (taskEnd.getTime() >= startMs && taskStart.getTime() <= endMs) {
+                            const leftOffset = (Math.max(taskStart.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
+                            const rightOffset = (Math.min(taskEnd.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
+                            const left = (leftOffset / daysInMonth) * 100;
+                            const width = ((rightOffset - leftOffset + 1) / daysInMonth) * 100;
+
+                            const assignee = ASSIGNEES[task.name] || { i:'?', c: 'bg-gray-500' };
+                            const barColor = task.status === 'completed' ? 'bg-gray-400' : assignee.c;
+
+                            bodyHtml += `<div class="absolute gantt-task-bar ${barColor}" style="left: ${left}%; width: ${width}%;" data-task-id="${task.id}" data-task-source="${task.source}">
+                                            <span class="font-bold text-xs">${assignee.i}</span>
+                                            <span class="task-title">${task.title}</span>
+                                            <div class="task-actions">
+                                                <button class="edit-task-btn w-5 h-5 rounded-sm hover:bg-black/30 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
+                                                <button class="delete-task-btn w-5 h-5 rounded-sm hover:bg-black/30 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                                            </div>
+                                         </div>`;
+                        }
+                        bodyHtml += `</div></div>`; // Close task row grid and timeline cell
+                    });
+                } else {
+                    // Empty category row
+                    bodyHtml += `<div class="grid" style="grid-template-columns: 200px 1fr;"><div class="sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 text-gray-400 text-sm italic">(업무 없음)</div><div class="border-b border-gray-200 dark:border-gray-600/50"></div></div>`;
                 }
-            }
+            });
 
-            document.querySelectorAll('.close-modal-btn').forEach(btn => btn.addEventListener('click', (e) => e.target.closest('.fixed').classList.add('hidden')));
+            DOM.ganttChart.innerHTML = `<div class="animate-fade-in">${headerHtml}${bodyHtml}</div>`;
+        };
+        
+        const renderCategoryList = (categories) => {
+            DOM.categoryList.innerHTML = categories.map(c => `
+                <div class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                    <span class="font-medium">${c.name}</span>
+                    <button data-id="${c.id}" class="delete-category-btn w-7 h-7 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500"><i class="fa-solid fa-trash-can text-sm"></i></button>
+                </div>`).join('') || '<p class="text-center text-sm text-gray-400">카테고리가 없습니다.</p>';
+        };
+
+        const renderAll = () => {
+            if (!state.isAuthReady) return;
+            renderGanttChart();
+        };
+
+        // --- 모달 관리 ---
+        const openModal = (modal) => modal.classList.remove('hidden');
+        const closeModal = (modal) => modal.classList.add('hidden');
+
+        const openTaskModal = (task = null) => {
+            DOM.taskForm.reset();
+            const taskCategory = document.getElementById('task-category');
+            const taskName = document.getElementById('task-name');
+            taskCategory.innerHTML = state.categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            taskName.innerHTML = Object.keys(ASSIGNEES).map(name => `<option value="${name}">${name}</option>`).join('');
             
-            document.getElementById('manage-category-btn').addEventListener('click', openCategoryModal);
-            document.getElementById('add-task-btn').addEventListener('click', () => openTaskModal());
-            document.getElementById('confirm-delete-btn').addEventListener('click', handleDeleteConfirmed);
-            document.getElementById('add-category-form').addEventListener('submit', handleAddCategoryFormSubmit);
-            uiElements.taskForm.addEventListener('submit', handleTaskFormSubmit);
+            if (task) {
+                document.getElementById('task-modal-title').textContent = '업무 수정';
+                document.getElementById('task-id').value = task.id;
+                document.getElementById('task-source').value = task.source;
+                taskCategory.value = task.category;
+                document.getElementById('task-title').value = task.title;
+                document.getElementById('task-url').value = task.url || '';
+                taskName.value = task.name;
+                document.getElementById('task-start-date').value = task.startDate;
+                document.querySelector(`input[name="task-status"][value="${task.status}"]`).checked = true;
+                const isCompleted = task.status === 'completed';
+                document.getElementById('end-date-wrapper').classList.toggle('hidden', !isCompleted);
+                if(isCompleted) document.getElementById('task-end-date').value = task.endDate;
+            } else {
+                document.getElementById('task-modal-title').textContent = '새 업무 추가';
+                document.getElementById('task-start-date').valueAsDate = new Date();
+                document.querySelector('input[name="task-status"][value="inProgress"]').checked = true;
+                document.getElementById('end-date-wrapper').classList.add('hidden');
+            }
+            openModal(DOM.taskModal);
+        };
+
+        const openDeleteConfirmModal = (id, type, source = null) => {
+            state.itemToDelete = { id, type, source };
+            document.getElementById('delete-confirm-title').textContent = type === 'task' ? '업무 삭제' : '카테고리 삭제';
+            document.getElementById('delete-confirm-message').textContent = `정말로 이 ${type === 'task' ? '업무' : '카테고리'}를 삭제하시겠습니까?`;
+            openModal(DOM.deleteModal);
+        };
+        
+        const handleTaskFormSubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('task-id').value;
+            const source = document.getElementById('task-source').value;
+            const status = document.querySelector('input[name="task-status"]:checked').value;
+            const data = {
+                category: document.getElementById('task-category').value,
+                title: document.getElementById('task-title').value.trim(),
+                url: document.getElementById('task-url').value.trim(),
+                name: document.getElementById('task-name').value,
+                startDate: document.getElementById('task-start-date').value,
+                status: status,
+                endDate: status === 'completed' ? document.getElementById('task-end-date').value : null,
+            };
+            if (!data.endDate && status === 'completed') data.endDate = formatDate(new Date());
+            closeModal(DOM.taskModal);
             
-            document.addEventListener('click', e => {
-                if(e.target.closest('.modal-backdrop')) e.target.closest('.modal-backdrop').classList.add('hidden');
+            try {
+                if (id) {
+                    const collectionPath = source === 'old' ? `artifacts/${appId}/public/data/work-pages` : "tasks";
+                    await updateDoc(doc(db, collectionPath, id), data);
+                } else {
+                    data.createdAt = serverTimestamp();
+                    await addDoc(collection(db, "tasks"), data);
+                }
+            } catch(err) { console.error("업무 저장 실패:", err); alert("업무 저장에 실패했습니다.");}
+        };
+
+        const handleAddCategoryFormSubmit = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('new-category-name');
+            const name = input.value.trim();
+            if (name && !state.categories.some(c => c.name === name)) {
+                await addDoc(collection(db, "categories"), { name, createdAt: serverTimestamp() });
+                input.value = '';
+            } else if (name) {
+                alert("이미 존재하는 카테고리입니다.");
+            }
+        };
+
+        const handleDeleteConfirmed = async () => {
+            const { id, type, source } = state.itemToDelete;
+            closeModal(DOM.deleteModal);
+            if (!id || !type) return;
+
+            try {
+                if (type === 'task') {
+                    const collectionPath = source === 'old' ? `artifacts/${appId}/public/data/work-pages` : "tasks";
+                    await deleteDoc(doc(db, collectionPath, id));
+                } else if (type === 'category') {
+                    await deleteDoc(doc(db, "categories", id));
+                }
+            } catch (err) { console.error("삭제 실패:", err); }
+        };
+
+        const setupEventListeners = () => {
+            document.body.addEventListener('click', e => {
+                const closeModalBtn = e.target.closest('.close-modal-btn');
+                if (closeModalBtn) closeModal(closeModalBtn.closest('.fixed'));
+                
                 const editBtn = e.target.closest('.edit-task-btn');
                 const deleteBtn = e.target.closest('.delete-task-btn');
                 const deleteCategoryBtn = e.target.closest('.delete-category-btn');
+
                 if (editBtn) {
-                    const task = allTasks.find(t => t.id === editBtn.closest('li').dataset.id);
+                    const taskBar = editBtn.closest('.gantt-task-bar');
+                    const task = state.tasks.find(t => t.id === taskBar.dataset.taskId);
                     if (task) openTaskModal(task);
                 }
-                if (deleteBtn) openDeleteConfirmModal(deleteBtn.closest('li').dataset.id, 'task', deleteBtn.closest('li').dataset.source);
-                if (deleteCategoryBtn) openDeleteConfirmModal(deleteCategoryBtn.dataset.id, 'category');
-            });
-            
-            uiElements.taskForm.addEventListener('change', e => {
-                if(e.target.name === 'task-status') document.getElementById('end-date-wrapper').classList.toggle('hidden', e.target.value === 'inProgress');
-            });
-
-            onAuthStateChanged(auth, async user => {
-                if (user) {
-                    await initializeDefaultCategories(); 
-                    onSnapshot(query(collection(db, "categories"), orderBy("createdAt", "asc")), categorySnapshot => {
-                        categories = categorySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        renderCategoryList(categories);
-                        let newTasks = [], oldTasks = [];
-                        let newTasksLoaded = false, oldTasksLoaded = false;
-                        
-                        const mergeAndRender = () => {
-                            if (newTasksLoaded && oldTasksLoaded) {
-                                allTasks = [...newTasks, ...oldTasks];
-                                renderBoard(categories, allTasks);
-                                renderTimeline(allTasks); 
-                            }
-                        };
-                        onSnapshot(collection(db, "tasks"), snapshot => {
-                            newTasks = snapshot.docs.map(doc => ({ id: doc.id, source: 'new', ...doc.data() }));
-                            newTasksLoaded = true;
-                            mergeAndRender();
-                        }, e => handleFirestoreError(e, '새 업무 데이터'));
-                        onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'work-pages'), snapshot => {
-                            oldTasks = snapshot.docs.map(doc => {
-                                const data = doc.data();
-                                return { id: doc.id, source: 'old', ...data, category: data.category || '기본', status: 'completed', endDate: data.date, startDate: data.date };
-                            });
-                            oldTasksLoaded = true;
-                            mergeAndRender();
-                        }, e => handleFirestoreError(e, '기존 업무 데이터'));
-                    }, e => handleFirestoreError(e, '카테고리 데이터'));
-                } else {
-                    signInAnonymously(auth).catch(err => {
-                        if (err.code === 'auth/configuration-not-found') {
-                            displayError('Firebase 인증 설정 필요', '프로젝트에서 익명 로그인을 활성화해야 합니다.', `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`, '인증 설정으로 이동');
-                        }
-                    });
+                if (deleteBtn) {
+                    const taskBar = deleteBtn.closest('.gantt-task-bar');
+                    openDeleteConfirmModal(taskBar.dataset.taskId, 'task', taskBar.dataset.taskSource);
+                }
+                 if (deleteCategoryBtn) {
+                    openDeleteConfirmModal(deleteCategoryBtn.dataset.id, 'category');
                 }
             });
-        }
+
+            document.getElementById('prev-month-btn').addEventListener('click', () => {
+                state.viewDate.setMonth(state.viewDate.getMonth() - 1);
+                renderAll();
+            });
+            document.getElementById('next-month-btn').addEventListener('click', () => {
+                state.viewDate.setMonth(state.viewDate.getMonth() + 1);
+                renderAll();
+            });
+            document.getElementById('today-btn').addEventListener('click', () => {
+                state.viewDate = new Date();
+                renderAll();
+            });
+
+            document.getElementById('manage-category-btn').addEventListener('click', () => openModal(DOM.categoryModal));
+            document.getElementById('add-task-btn').addEventListener('click', () => openTaskModal());
+            document.getElementById('confirm-delete-btn').addEventListener('click', handleDeleteConfirmed);
+            document.getElementById('add-category-form').addEventListener('submit', handleAddCategoryFormSubmit);
+            DOM.taskForm.addEventListener('submit', handleTaskFormSubmit);
+            DOM.taskForm.querySelector('input[name="task-status"]').addEventListener('change', e => {
+                document.getElementById('end-date-wrapper').classList.toggle('hidden', e.target.value !== 'completed');
+            });
+            DOM.darkModeToggle.addEventListener('click', () => {
+                const html = document.documentElement;
+                html.classList.toggle('dark');
+                localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+                DOM.darkModeToggle.querySelector('i').classList.toggle('fa-sun', !html.classList.contains('dark'));
+                DOM.darkModeToggle.querySelector('i').classList.toggle('fa-moon', html.classList.contains('dark'));
+            });
+        };
+
+        const setupDataListeners = () => {
+            let categoriesLoaded = false, newTasksLoaded = false, oldTasksLoaded = false;
+            let newTasks = [], oldTasks = [];
+            
+            const combineAndRender = () => {
+                if (categoriesLoaded && newTasksLoaded && oldTasksLoaded) {
+                     state.tasks = [...newTasks, ...oldTasks];
+                     renderAll();
+                }
+            };
+            
+            onSnapshot(query(collection(db, "categories"), orderBy("createdAt")), snapshot => {
+                state.categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderCategoryList(state.categories);
+                categoriesLoaded = true;
+                combineAndRender();
+            });
+            
+            onSnapshot(collection(db, "tasks"), snapshot => {
+                newTasks = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    // 카테고리 없는 데이터에 '기본' 할당
+                    return { id: doc.id, source: 'new', ...data, category: data.category || '기본' };
+                });
+                newTasksLoaded = true;
+                combineAndRender();
+            });
+
+            onSnapshot(collection(db, `artifacts/${appId}/public/data/work-pages`), snapshot => {
+                oldTasks = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                     // 카테고리 없는 데이터에 '기본' 할당
+                    return { id: doc.id, source: 'old', ...data, category: data.category || '기본', status: 'completed', endDate: data.date, startDate: data.date };
+                });
+                oldTasksLoaded = true;
+                combineAndRender();
+            });
+        };
+
+        const initializeDefaultCategories = async () => {
+            const categoriesRef = collection(db, "categories");
+            const snapshot = await getDocs(categoriesRef);
+            if (snapshot.empty) {
+                const batch = writeBatch(db);
+                // '미분류' 대신 '기본'을 기본 카테고리로 포함
+                const defaultCategories = ['Frontend', 'Backend', 'Design', '기본'];
+                defaultCategories.forEach(name => {
+                    const docRef = doc(categoriesRef);
+                    batch.set(docRef, { name, createdAt: serverTimestamp() });
+                });
+                await batch.commit();
+            }
+        };
+
+        const init = () => {
+            if (!db) return;
+            const theme = localStorage.getItem('theme');
+            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                DOM.darkModeToggle.querySelector('i').classList.replace('fa-sun', 'fa-moon');
+            }
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    if (!state.isAuthReady) {
+                        state.isAuthReady = true;
+                        await initializeDefaultCategories();
+                        setupEventListeners();
+                        setupDataListeners();
+                    }
+                } else {
+                    signInAnonymously(auth).catch(console.error);
+                }
+            });
+        };
+
+        init();
     </script>
 </body>
 </html>

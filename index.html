@@ -23,15 +23,17 @@
             display: none;
             gap: 0.25rem;
             background-color: rgba(0,0,0,0.1);
-            dark:background-color: rgba(255,255,255,0.1);
             padding: 4px;
             border-radius: 5px;
+        }
+        .dark .task-row-title .task-actions {
+             background-color: rgba(255,255,255,0.1);
         }
         .task-row:hover .task-actions {
             display: flex;
         }
 
-        .gantt-task-bar {
+        .timeline-task-bar {
             position: absolute;
             height: calc(100% - 0.5rem);
             min-height: 1.75rem;
@@ -46,13 +48,18 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            cursor: pointer;
         }
-        .gantt-task-bar .task-title-in-bar {
+        .timeline-task-bar .task-title-in-bar {
             text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
             font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+        .view-toggle-btn.active {
+            background-color: #4f46e5; /* indigo-600 */
+            color: white;
         }
     </style>
 </head>
@@ -62,7 +69,7 @@
         
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
-                <i class="fa-solid fa-chart-gantt text-indigo-500"></i>
+                <i class="fa-solid fa-calendar-week text-indigo-500"></i>
                 <span>GGP CAMERA 업무 현황</span>
             </h1>
             <div class="flex items-center gap-2">
@@ -79,22 +86,26 @@
         </header>
 
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-            <div id="gantt-controls" class="flex items-center justify-between mb-4">
-                <h2 id="current-month-year" class="text-xl font-bold text-gray-700 dark:text-gray-200"></h2>
+            <div id="timeline-controls" class="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
+                 <div class="flex items-center gap-2 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
+                    <button id="view-week-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">주</button>
+                    <button id="view-month-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">월</button>
+                </div>
+                <h2 id="current-range-display" class="text-lg sm:text-xl font-bold text-gray-700 dark:text-gray-200 order-first sm:order-none"></h2>
                 <div class="flex items-center gap-2">
-                    <button id="prev-month-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">&lt; 이전</button>
+                    <button id="prev-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">&lt; 이전</button>
                     <button id="today-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">오늘</button>
-                    <button id="next-month-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">다음 &gt;</button>
+                    <button id="next-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">다음 &gt;</button>
                 </div>
             </div>
-            <div id="gantt-chart-container" class="overflow-visible">
-                 <p class="initial-loading-message text-center text-gray-500 dark:text-gray-400">간트 차트 로딩 중...</p>
+            <div id="timeline-container" class="overflow-x-auto">
+                 <p class="initial-loading-message text-center text-gray-500 dark:text-gray-400">타임라인 로딩 중...</p>
             </div>
         </div>
 
     </div>
 
-    <!-- Modals -->
+    <!-- Modals (unchanged) -->
     <div id="task-modal" role="dialog" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6"></h3>
@@ -176,7 +187,7 @@
             "Kai Kim": {i:"K", c:"bg-yellow-500"}, "Trey Song": {i:"T", c:"bg-purple-500"} 
         };
         const DOM = {
-            ganttChart: document.getElementById('gantt-chart-container'),
+            timelineContainer: document.getElementById('timeline-container'),
             taskModal: document.getElementById('task-modal'),
             categoryModal: document.getElementById('category-modal'),
             deleteModal: document.getElementById('delete-confirm-modal'),
@@ -186,7 +197,7 @@
         };
         
         let db, auth, userId, appId;
-        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date() };
+        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), viewMode: 'week' };
 
         try {
             const firebaseConfig = {
@@ -215,28 +226,40 @@
 
         const formatDate = (date) => date.toISOString().split('T')[0];
 
-        const renderGanttChart = () => {
-            const { tasks, categories, viewDate } = state;
-            const year = viewDate.getFullYear();
-            const month = viewDate.getMonth();
-            
-            document.getElementById('current-month-year').textContent = `${year}년 ${month + 1}월`;
+        const renderTimeline = () => {
+            const { tasks, categories, viewDate, viewMode } = state;
 
-            const startDateOfMonth = new Date(year, month, 1);
-            const endDateOfMonth = new Date(year, month + 1, 0);
-            const daysInMonth = endDateOfMonth.getDate();
+            // Define date range based on viewMode
+            let startDate, endDate;
+            if (viewMode === 'week') {
+                startDate = new Date(viewDate);
+                startDate.setDate(startDate.getDate() - startDate.getDay());
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 6);
+                document.getElementById('current-range-display').textContent = `${startDate.toLocaleDateString('ko-KR')} ~ ${endDate.toLocaleDateString('ko-KR')}`;
+            } else { // month view
+                startDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+                endDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
+                document.getElementById('current-range-display').textContent = `${viewDate.getFullYear()}년 ${viewDate.getMonth() + 1}월`;
+            }
 
             const dateArray = [];
-            for (let d = new Date(startDateOfMonth); d <= endDateOfMonth; d.setDate(d.getDate() + 1)) {
+            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
                 dateArray.push(new Date(d));
             }
-            
+            const daysInRange = dateArray.length;
             const todayStr = formatDate(new Date());
+            
+            const timelineGrid = document.createElement('div');
+            timelineGrid.className = 'animate-fade-in';
+            if (viewMode === 'month') {
+                 timelineGrid.style.minWidth = `${200 + daysInRange * 40}px`;
+            }
 
             // Build header
             let headerHtml = `<div class="sticky top-0 z-20 bg-gray-200 dark:bg-gray-700 grid" style="grid-template-columns: 200px 1fr;">`;
             headerHtml += `<div class="font-semibold text-sm p-2 border-r border-b border-gray-300 dark:border-gray-600">업무</div>`;
-            headerHtml += `<div class="grid" style="grid-template-columns: repeat(${daysInMonth}, minmax(0, 1fr));">`;
+            headerHtml += `<div class="grid" style="grid-template-columns: repeat(${daysInRange}, minmax(0, 1fr));">`;
             dateArray.forEach(d => {
                 const isToday = formatDate(d) === todayStr;
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -246,68 +269,83 @@
                 </div>`;
             });
             headerHtml += `</div></div>`;
+            timelineGrid.innerHTML = headerHtml;
 
             // Build body rows
-            let bodyHtml = '';
-            
             categories.forEach(cat => {
                 const categoryTasks = tasks.filter(t => t.category === cat.name).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
                 
-                // Category header row
-                bodyHtml += `<div class="grid" style="grid-template-columns: 200px 1fr;">`;
-                bodyHtml += `<div class="sticky left-0 bg-gray-100 dark:bg-gray-700/80 font-bold p-2 text-sm border-b border-r border-gray-300 dark:border-gray-600 col-span-2">${cat.name}</div>`;
-                bodyHtml += `</div>`;
+                const categoryRow = document.createElement('div');
+                categoryRow.className = 'grid';
+                categoryRow.style.gridTemplateColumns = '200px 1fr';
+                categoryRow.innerHTML = `<div class="sticky left-0 z-10 bg-gray-100 dark:bg-gray-700/80 font-bold p-2 text-sm border-b border-r border-gray-300 dark:border-gray-600 col-span-2">${cat.name}</div>`;
+                timelineGrid.appendChild(categoryRow);
                 
                 if (categoryTasks.length > 0) {
                     categoryTasks.forEach(task => {
-                        bodyHtml += `<div class="task-row grid" style="grid-template-columns: 200px 1fr;" data-task-id="${task.id}" data-task-source="${task.source}">`;
-                        // Task title cell
-                        bodyHtml += `<div class="task-row-title sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-center text-sm">
-                                        <a href="${task.url || '#'}" target="_blank" class="truncate flex-grow" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
+                        const taskRow = document.createElement('div');
+                        taskRow.className = 'task-row grid';
+                        taskRow.style.gridTemplateColumns = '200px 1fr';
+                        taskRow.dataset.taskId = task.id;
+                        taskRow.dataset.taskSource = task.source;
+
+                        taskRow.innerHTML = `<div class="task-row-title sticky left-0 z-10 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-center text-sm">
+                                        <div class="truncate flex-grow">${task.title}</div>
                                         <div class="task-actions">
                                             <button class="edit-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
                                             <button class="delete-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs text-red-500"></i></button>
                                         </div>
                                      </div>`;
-                        // Task timeline cell (container for bar and background)
-                        bodyHtml += `<div class="relative border-b border-gray-200 dark:border-gray-600/50 grid" style="grid-template-columns: repeat(${daysInMonth}, minmax(0, 1fr));">`;
                         
-                        // Background cells
-                        for(let i=0; i < dateArray.length; i++) {
+                        const timelineCell = document.createElement('div');
+                        timelineCell.className = 'relative border-b border-gray-200 dark:border-gray-600/50 grid';
+                        timelineCell.style.gridTemplateColumns = `repeat(${daysInRange}, minmax(0, 1fr))`;
+                        
+                        for(let i=0; i < daysInRange; i++) {
+                            const bgCell = document.createElement('div');
                             const isWeekend = dateArray[i].getDay() === 0 || dateArray[i].getDay() === 6;
-                            bodyHtml += `<div class="border-r border-gray-200 dark:border-gray-600/50 ${isWeekend ? 'bg-gray-50 dark:bg-gray-800/40' : ''}"></div>`;
+                            bgCell.className = `border-r border-gray-200 dark:border-gray-600/50 ${isWeekend ? 'bg-gray-50 dark:bg-gray-800/40' : ''}`;
+                            timelineCell.appendChild(bgCell);
                         }
 
-                        // Calculate and create task bar
                         const taskStart = new Date(task.startDate + 'T00:00:00');
                         const taskEnd = task.endDate ? new Date(task.endDate + 'T00:00:00') : new Date(todayStr + 'T00:00:00');
-                        
-                        const startMs = startDateOfMonth.getTime();
-                        const endMs = endDateOfMonth.getTime();
+                        const startMs = startDate.getTime();
+                        const endMs = endDate.getTime();
 
                         if (taskEnd.getTime() >= startMs && taskStart.getTime() <= endMs) {
                             const leftOffset = (Math.max(taskStart.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
                             const rightOffset = (Math.min(taskEnd.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
-                            const left = (leftOffset / daysInMonth) * 100;
-                            const width = ((rightOffset - leftOffset + 1) / daysInMonth) * 100;
+                            const left = (leftOffset / daysInRange) * 100;
+                            const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
 
                             const assignee = ASSIGNEES[task.name] || { i:'?', c: 'bg-gray-500' };
                             const barColor = task.status === 'completed' ? 'bg-gray-400' : assignee.c;
-
-                            bodyHtml += `<a href="${task.url || '#'}" target="_blank" class="absolute gantt-task-bar ${barColor}" style="left: ${left}%; width: ${width}%;" ${!task.url ? 'onclick="return false;"' : ''}>
-                                            <span class="font-bold text-xs">${assignee.i}</span>
-                                            <span class="task-title-in-bar">${task.title}</span>
-                                         </a>`;
+                            
+                            const taskBar = document.createElement('a');
+                            taskBar.href = task.url || '#';
+                            taskBar.target = '_blank';
+                            if(!task.url) taskBar.onclick = () => false;
+                            taskBar.className = `absolute timeline-task-bar ${barColor}`;
+                            taskBar.style.left = `${left}%`;
+                            taskBar.style.width = `${width}%`;
+                            taskBar.innerHTML = `<span class="font-bold text-xs">${assignee.i}</span><span class="task-title-in-bar">${task.title}</span>`;
+                            timelineCell.appendChild(taskBar);
                         }
-                        bodyHtml += `</div></div>`; // Close task row grid and timeline cell
+                        taskRow.appendChild(timelineCell);
+                        timelineGrid.appendChild(taskRow);
                     });
                 } else {
-                    // Empty category row
-                    bodyHtml += `<div class="grid" style="grid-template-columns: 200px 1fr;"><div class="sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 text-gray-400 text-sm italic">(업무 없음)</div><div class="border-b border-gray-200 dark:border-gray-600/50"></div></div>`;
+                    const emptyRow = document.createElement('div');
+                    emptyRow.className = 'grid';
+                    emptyRow.style.gridTemplateColumns = '200px 1fr';
+                    emptyRow.innerHTML = `<div class="sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 text-gray-400 text-sm italic">(업무 없음)</div><div class="border-b border-gray-200 dark:border-gray-600/50"></div>`;
+                    timelineGrid.appendChild(emptyRow);
                 }
             });
 
-            DOM.ganttChart.innerHTML = `<div class="animate-fade-in">${headerHtml}${bodyHtml}</div>`;
+            DOM.timelineContainer.innerHTML = '';
+            DOM.timelineContainer.appendChild(timelineGrid);
         };
         
         const renderCategoryList = (categories) => {
@@ -320,8 +358,14 @@
 
         const renderAll = () => {
             if (!state.isAuthReady) return;
-            renderGanttChart();
+            renderTimeline();
+            updateViewToggle();
         };
+
+        const updateViewToggle = () => {
+             document.getElementById('view-week-btn').classList.toggle('active', state.viewMode === 'week');
+             document.getElementById('view-month-btn').classList.toggle('active', state.viewMode === 'month');
+        }
 
         // --- 모달 관리 ---
         const openModal = (modal) => modal.classList.remove('hidden');
@@ -441,32 +485,48 @@
                     return;
                 }
                 
-                // Modal specific close buttons
                 const closeModalBtn = e.target.closest('.close-modal-btn');
                 if(closeModalBtn) {
                     closeModal(closeModalBtn.closest('.fixed'));
                     return;
                 }
                 
-                // Backdrop click to close
                 if(e.target.matches('.fixed[role="dialog"]')) {
                     closeModal(e.target);
                     return;
                 }
             });
 
-            document.getElementById('prev-month-btn').addEventListener('click', () => {
-                state.viewDate.setMonth(state.viewDate.getMonth() - 1);
+            document.getElementById('prev-btn').addEventListener('click', () => {
+                if(state.viewMode === 'week') {
+                    state.viewDate.setDate(state.viewDate.getDate() - 7);
+                } else {
+                    state.viewDate.setMonth(state.viewDate.getMonth() - 1);
+                }
                 renderAll();
             });
-            document.getElementById('next-month-btn').addEventListener('click', () => {
-                state.viewDate.setMonth(state.viewDate.getMonth() + 1);
+            document.getElementById('next-btn').addEventListener('click', () => {
+                if(state.viewMode === 'week') {
+                    state.viewDate.setDate(state.viewDate.getDate() + 7);
+                } else {
+                    state.viewDate.setMonth(state.viewDate.getMonth() + 1);
+                }
                 renderAll();
             });
             document.getElementById('today-btn').addEventListener('click', () => {
                 state.viewDate = new Date();
                 renderAll();
             });
+            
+            document.getElementById('view-week-btn').addEventListener('click', () => {
+                state.viewMode = 'week';
+                renderAll();
+            });
+             document.getElementById('view-month-btn').addEventListener('click', () => {
+                state.viewMode = 'month';
+                renderAll();
+            });
+
 
             document.getElementById('manage-category-btn').addEventListener('click', () => openModal(DOM.categoryModal));
             document.getElementById('add-task-btn').addEventListener('click', () => openTaskModal());

@@ -12,6 +12,25 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
         
+        .task-row-title {
+            position: relative;
+        }
+        .task-row-title .task-actions {
+            position: absolute;
+            top: 50%;
+            right: 0.5rem;
+            transform: translateY(-50%);
+            display: none;
+            gap: 0.25rem;
+            background-color: rgba(0,0,0,0.1);
+            dark:background-color: rgba(255,255,255,0.1);
+            padding: 4px;
+            border-radius: 5px;
+        }
+        .task-row:hover .task-actions {
+            display: flex;
+        }
+
         .gantt-task-bar {
             position: absolute;
             height: calc(100% - 0.5rem);
@@ -28,26 +47,12 @@
             align-items: center;
             gap: 0.5rem;
         }
-        .gantt-task-bar .task-title {
+        .gantt-task-bar .task-title-in-bar {
             text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
             font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-        .gantt-task-bar .task-actions {
-            position: absolute;
-            top: 50%;
-            right: 0.5rem;
-            transform: translateY(-50%);
-            display: none;
-            gap: 0.25rem;
-            background-color: rgba(0,0,0,0.2);
-            padding: 2px 4px;
-            border-radius: 5px;
-        }
-        .gantt-task-bar:hover .task-actions {
-            display: flex;
         }
     </style>
 </head>
@@ -90,7 +95,7 @@
     </div>
 
     <!-- Modals -->
-    <div id="task-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
+    <div id="task-modal" role="dialog" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6"></h3>
             <form id="task-form">
@@ -136,7 +141,7 @@
         </div>
     </div>
     
-    <div id="category-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
+    <div id="category-modal" role="dialog" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6">카테고리 관리</h3>
             <div id="category-list" class="space-y-2 mb-6 max-h-60 overflow-y-auto pr-2"></div>
@@ -150,7 +155,7 @@
         </div>
     </div>
 
-    <div id="delete-confirm-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
+    <div id="delete-confirm-modal" role="dialog" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6">
             <h3 id="delete-confirm-title" class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2"></h3>
             <p id="delete-confirm-message" class="text-gray-600 dark:text-gray-300 mb-6"></p>
@@ -255,10 +260,14 @@
                 
                 if (categoryTasks.length > 0) {
                     categoryTasks.forEach(task => {
-                        bodyHtml += `<div class="grid" style="grid-template-columns: 200px 1fr;">`;
+                        bodyHtml += `<div class="task-row grid" style="grid-template-columns: 200px 1fr;" data-task-id="${task.id}" data-task-source="${task.source}">`;
                         // Task title cell
-                        bodyHtml += `<div class="sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-center text-sm">
-                                        <a href="${task.url || '#'}" target="_blank" class="truncate" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
+                        bodyHtml += `<div class="task-row-title sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-center text-sm">
+                                        <a href="${task.url || '#'}" target="_blank" class="truncate flex-grow" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
+                                        <div class="task-actions">
+                                            <button class="edit-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
+                                            <button class="delete-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs text-red-500"></i></button>
+                                        </div>
                                      </div>`;
                         // Task timeline cell (container for bar and background)
                         bodyHtml += `<div class="relative border-b border-gray-200 dark:border-gray-600/50 grid" style="grid-template-columns: repeat(${daysInMonth}, minmax(0, 1fr));">`;
@@ -285,14 +294,10 @@
                             const assignee = ASSIGNEES[task.name] || { i:'?', c: 'bg-gray-500' };
                             const barColor = task.status === 'completed' ? 'bg-gray-400' : assignee.c;
 
-                            bodyHtml += `<div class="absolute gantt-task-bar ${barColor}" style="left: ${left}%; width: ${width}%;" data-task-id="${task.id}" data-task-source="${task.source}">
+                            bodyHtml += `<a href="${task.url || '#'}" target="_blank" class="absolute gantt-task-bar ${barColor}" style="left: ${left}%; width: ${width}%;" ${!task.url ? 'onclick="return false;"' : ''}>
                                             <span class="font-bold text-xs">${assignee.i}</span>
-                                            <span class="task-title">${task.title}</span>
-                                            <div class="task-actions">
-                                                <button class="edit-task-btn w-5 h-5 rounded-sm hover:bg-black/30 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
-                                                <button class="delete-task-btn w-5 h-5 rounded-sm hover:bg-black/30 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs"></i></button>
-                                            </div>
-                                         </div>`;
+                                            <span class="task-title-in-bar">${task.title}</span>
+                                         </a>`;
                         }
                         bodyHtml += `</div></div>`; // Close task row grid and timeline cell
                     });
@@ -414,20 +419,19 @@
         };
 
         const setupEventListeners = () => {
-            // Event delegation for dynamically created elements
             document.body.addEventListener('click', e => {
                 const editBtn = e.target.closest('.edit-task-btn');
                 if (editBtn) {
-                    const taskBar = editBtn.closest('.gantt-task-bar');
-                    const task = state.tasks.find(t => t.id === taskBar.dataset.taskId);
+                    const taskRow = editBtn.closest('.task-row');
+                    const task = state.tasks.find(t => t.id === taskRow.dataset.taskId);
                     if (task) openTaskModal(task);
                     return;
                 }
 
                 const deleteBtn = e.target.closest('.delete-task-btn');
                 if (deleteBtn) {
-                    const taskBar = deleteBtn.closest('.gantt-task-bar');
-                    openDeleteConfirmModal(taskBar.dataset.taskId, 'task', taskBar.dataset.taskSource);
+                    const taskRow = deleteBtn.closest('.task-row');
+                    openDeleteConfirmModal(taskRow.dataset.taskId, 'task', taskRow.dataset.taskSource);
                     return;
                 }
 
@@ -436,24 +440,21 @@
                     openDeleteConfirmModal(deleteCategoryBtn.dataset.id, 'category');
                     return;
                 }
+                
+                // Modal specific close buttons
+                const closeModalBtn = e.target.closest('.close-modal-btn');
+                if(closeModalBtn) {
+                    closeModal(closeModalBtn.closest('.fixed'));
+                    return;
+                }
+                
+                // Backdrop click to close
+                if(e.target.matches('.fixed[role="dialog"]')) {
+                    closeModal(e.target);
+                    return;
+                }
             });
 
-            // Listeners for modals (close buttons and backdrop)
-            document.querySelectorAll('.fixed[role="dialog"]').forEach(modal => {
-                 modal.addEventListener('click', (e) => {
-                    // Close on backdrop click
-                    if (e.target === modal) {
-                        closeModal(modal);
-                    }
-                 });
-            });
-             document.querySelectorAll('.close-modal-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                     closeModal(btn.closest('.fixed'));
-                });
-             });
-
-            // Other static element listeners
             document.getElementById('prev-month-btn').addEventListener('click', () => {
                 state.viewDate.setMonth(state.viewDate.getMonth() - 1);
                 renderAll();

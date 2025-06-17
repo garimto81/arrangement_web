@@ -89,9 +89,9 @@
 
     </div>
 
-    <!-- Modals (unchanged) -->
+    <!-- Modals -->
     <div id="task-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6" onclick="event.stopPropagation()">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6"></h3>
             <form id="task-form">
                 <input type="hidden" id="task-id"><input type="hidden" id="task-source">
@@ -137,7 +137,7 @@
     </div>
     
     <div id="category-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6" onclick="event.stopPropagation()">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6">카테고리 관리</h3>
             <div id="category-list" class="space-y-2 mb-6 max-h-60 overflow-y-auto pr-2"></div>
             <form id="add-category-form" class="flex gap-2">
@@ -151,7 +151,7 @@
     </div>
 
     <div id="delete-confirm-modal" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6" onclick="event.stopPropagation()">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6">
             <h3 id="delete-confirm-title" class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2"></h3>
             <p id="delete-confirm-message" class="text-gray-600 dark:text-gray-300 mb-6"></p>
             <div class="flex justify-end gap-3">
@@ -414,28 +414,46 @@
         };
 
         const setupEventListeners = () => {
+            // Event delegation for dynamically created elements
             document.body.addEventListener('click', e => {
-                const closeModalBtn = e.target.closest('.close-modal-btn');
-                if (closeModalBtn) closeModal(closeModalBtn.closest('.fixed'));
-                
                 const editBtn = e.target.closest('.edit-task-btn');
-                const deleteBtn = e.target.closest('.delete-task-btn');
-                const deleteCategoryBtn = e.target.closest('.delete-category-btn');
-
                 if (editBtn) {
                     const taskBar = editBtn.closest('.gantt-task-bar');
                     const task = state.tasks.find(t => t.id === taskBar.dataset.taskId);
                     if (task) openTaskModal(task);
+                    return;
                 }
+
+                const deleteBtn = e.target.closest('.delete-task-btn');
                 if (deleteBtn) {
                     const taskBar = deleteBtn.closest('.gantt-task-bar');
                     openDeleteConfirmModal(taskBar.dataset.taskId, 'task', taskBar.dataset.taskSource);
+                    return;
                 }
-                 if (deleteCategoryBtn) {
+
+                const deleteCategoryBtn = e.target.closest('.delete-category-btn');
+                if (deleteCategoryBtn) {
                     openDeleteConfirmModal(deleteCategoryBtn.dataset.id, 'category');
+                    return;
                 }
             });
 
+            // Listeners for modals (close buttons and backdrop)
+            document.querySelectorAll('.fixed[role="dialog"]').forEach(modal => {
+                 modal.addEventListener('click', (e) => {
+                    // Close on backdrop click
+                    if (e.target === modal) {
+                        closeModal(modal);
+                    }
+                 });
+            });
+             document.querySelectorAll('.close-modal-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                     closeModal(btn.closest('.fixed'));
+                });
+             });
+
+            // Other static element listeners
             document.getElementById('prev-month-btn').addEventListener('click', () => {
                 state.viewDate.setMonth(state.viewDate.getMonth() - 1);
                 renderAll();
@@ -487,7 +505,6 @@
             onSnapshot(collection(db, "tasks"), snapshot => {
                 newTasks = snapshot.docs.map(doc => {
                     const data = doc.data();
-                    // 카테고리 없는 데이터에 '기본' 할당
                     return { id: doc.id, source: 'new', ...data, category: data.category || '기본' };
                 });
                 newTasksLoaded = true;
@@ -497,7 +514,6 @@
             onSnapshot(collection(db, `artifacts/${appId}/public/data/work-pages`), snapshot => {
                 oldTasks = snapshot.docs.map(doc => {
                     const data = doc.data();
-                     // 카테고리 없는 데이터에 '기본' 할당
                     return { id: doc.id, source: 'old', ...data, category: data.category || '기본', status: 'completed', endDate: data.date, startDate: data.date };
                 });
                 oldTasksLoaded = true;
@@ -510,7 +526,6 @@
             const snapshot = await getDocs(categoriesRef);
             if (snapshot.empty) {
                 const batch = writeBatch(db);
-                // '미분류' 대신 '기본'을 기본 카테고리로 포함
                 const defaultCategories = ['Frontend', 'Backend', 'Design', '기본'];
                 defaultCategories.forEach(name => {
                     const docRef = doc(categoriesRef);

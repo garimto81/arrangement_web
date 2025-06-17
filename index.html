@@ -223,8 +223,14 @@
             console.error("Firebase 초기화 실패:", error);
             document.body.innerHTML = `<div class="fixed inset-0 bg-red-100 text-red-800 flex items-center justify-center p-4 text-center"><p>${error.message}</p></div>`;
         }
-
-        const formatDate = (date) => date.toISOString().split('T')[0];
+        
+        // Timezone-safe date formatter
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
 
         const renderTimeline = () => {
             const { tasks, categories, viewDate, viewMode } = state;
@@ -378,6 +384,7 @@
         const updateViewToggle = () => {
              document.getElementById('view-week-btn').classList.toggle('active', state.viewMode === 'week');
              document.getElementById('view-month-btn').classList.toggle('active', state.viewMode === 'month');
+             DOM.timelineContainer.classList.toggle('overflow-x-auto', state.viewMode === 'month');
         }
 
         const openModal = (modal) => modal.classList.remove('hidden');

@@ -61,6 +61,10 @@
             background-color: #4f46e5; /* indigo-600 */
             color: white;
         }
+        /* 카테고리 순서 변경 버튼 숨김 처리 */
+        .priority-btn.hidden {
+            visibility: hidden;
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -88,9 +92,9 @@
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
             <div id="timeline-controls" class="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
                  <div class="flex items-center gap-2 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
-                    <button id="view-week-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">주</button>
-                    <button id="view-month-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">월</button>
-                </div>
+                     <button id="view-week-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">주</button>
+                     <button id="view-month-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">월</button>
+                 </div>
                 <h2 id="current-range-display" class="text-lg sm:text-xl font-bold text-gray-700 dark:text-gray-200 order-first sm:order-none"></h2>
                 <div class="flex items-center gap-2">
                     <button id="prev-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">&lt; 이전</button>
@@ -105,7 +109,7 @@
 
     </div>
 
-    <!-- Modals (unchanged) -->
+    <!-- Modals (unchanged except category-modal) -->
     <div id="task-modal" role="dialog" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6"></h3>
@@ -131,7 +135,7 @@
                       <div>
                         <label for="task-start-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">시작일</label>
                         <input type="date" id="task-start-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" required>
-                    </div>
+                      </div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">상태</label>
@@ -230,9 +234,14 @@
             const day = date.getDate().toString().padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
+        
+        const getSortedCategories = () => {
+            return [...state.categories].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+        };
 
         const renderTimeline = () => {
-            const { tasks, categories, viewDate, viewMode } = state;
+            const { tasks, viewDate, viewMode } = state;
+            const sortedCategories = getSortedCategories();
             const isMobile = window.innerWidth < 768;
 
             let startDate, endDate;
@@ -257,7 +266,7 @@
             
             const timelineGrid = document.createElement('div');
             timelineGrid.className = 'animate-fade-in';
-           
+            
             let headerHtml = `<div class="sticky top-0 z-20 bg-gray-200 dark:bg-gray-700 grid" style="grid-template-columns: 200px 1fr;">`;
             headerHtml += `<div class="font-semibold text-sm p-2 border-r border-b border-gray-300 dark:border-gray-600">업무</div>`;
             headerHtml += `<div class="grid" style="grid-template-columns: repeat(${daysInRange}, minmax(0, 1fr));">`;
@@ -272,7 +281,7 @@
             headerHtml += `</div></div>`;
             timelineGrid.innerHTML = headerHtml;
 
-            categories.forEach(cat => {
+            sortedCategories.forEach(cat => {
                 const categoryTasks = tasks.filter(t => t.category === cat.name).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
                 
                 if (cat.name === '기본' && categoryTasks.length === 0) {
@@ -294,14 +303,14 @@
                         taskRow.dataset.taskSource = task.source;
 
                         taskRow.innerHTML = `<div class="task-row-title sticky left-0 z-10 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-start text-sm">
-                                        <div class="flex-grow">
-                                            <a href="${task.url || '#'}" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
-                                        </div>
-                                        <div class="task-actions">
-                                            <button class="edit-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
-                                            <button class="delete-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs text-red-500"></i></button>
-                                        </div>
-                                     </div>`;
+                                            <div class="flex-grow">
+                                                <a href="${task.url || '#'}" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
+                                            </div>
+                                            <div class="task-actions">
+                                                <button class="edit-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
+                                                <button class="delete-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs text-red-500"></i></button>
+                                            </div>
+                                       </div>`;
                         
                         const timelineCell = document.createElement('div');
                         timelineCell.className = 'relative border-b border-gray-200 dark:border-gray-600/50 grid';
@@ -368,11 +377,19 @@
             DOM.timelineContainer.appendChild(timelineGrid);
         };
         
-        const renderCategoryList = (categories) => {
-            DOM.categoryList.innerHTML = categories.map(c => `
-                <div class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
-                    <span class="font-medium">${c.name}</span>
-                    <button data-id="${c.id}" class="delete-category-btn w-7 h-7 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500"><i class="fa-solid fa-trash-can text-sm"></i></button>
+        const renderCategoryList = () => {
+            const sortedCategories = getSortedCategories();
+
+            DOM.categoryList.innerHTML = sortedCategories.map((c, index) => `
+                <div class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md" data-id="${c.id}">
+                    <div class="flex items-center gap-2">
+                         <div class="flex flex-col">
+                            <button class="priority-btn move-category-up-btn ${index === 0 ? 'hidden' : ''}" aria-label="위로 이동"><i class="fa-solid fa-caret-up"></i></button>
+                            <button class="priority-btn move-category-down-btn ${index === sortedCategories.length - 1 ? 'hidden' : ''}" aria-label="아래로 이동"><i class="fa-solid fa-caret-down"></i></button>
+                         </div>
+                         <span class="font-medium">${c.name}</span>
+                    </div>
+                    <button class="delete-category-btn w-7 h-7 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500"><i class="fa-solid fa-trash-can text-sm"></i></button>
                 </div>`).join('') || '<p class="text-center text-sm text-gray-400">카테고리가 없습니다.</p>';
         };
 
@@ -395,7 +412,8 @@
             DOM.taskForm.reset();
             const taskCategory = document.getElementById('task-category');
             const taskName = document.getElementById('task-name');
-            taskCategory.innerHTML = state.categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            const sortedCategories = getSortedCategories();
+            taskCategory.innerHTML = sortedCategories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
             taskName.innerHTML = Object.keys(ASSIGNEES).map(name => `<option value="${name}">${name}</option>`).join('');
             
             if (task) {
@@ -460,7 +478,12 @@
             const input = document.getElementById('new-category-name');
             const name = input.value.trim();
             if (name && !state.categories.some(c => c.name === name)) {
-                await addDoc(collection(db, "categories"), { name, createdAt: serverTimestamp() });
+                const newPriority = state.categories.length > 0 ? Math.max(...state.categories.map(c => c.priority ?? 0)) + 1 : 0;
+                await addDoc(collection(db, "categories"), { 
+                    name, 
+                    createdAt: serverTimestamp(),
+                    priority: newPriority 
+                });
                 input.value = '';
             } else if (name) {
                 alert("이미 존재하는 카테고리입니다.");
@@ -480,6 +503,43 @@
                     await deleteDoc(doc(db, "categories", id));
                 }
             } catch (err) { console.error("삭제 실패:", err); }
+        };
+        
+        const handleCategoryPriorityChange = async (categoryId, direction) => {
+            const categories = getSortedCategories();
+            const currentIndex = categories.findIndex(c => c.id === categoryId);
+            
+            if (currentIndex === -1) return;
+            
+            let otherIndex;
+            if (direction === 'up' && currentIndex > 0) {
+                otherIndex = currentIndex - 1;
+            } else if (direction === 'down' && currentIndex < categories.length - 1) {
+                otherIndex = currentIndex + 1;
+            } else {
+                return;
+            }
+
+            // Create the new visual order in memory
+            const newOrder = [...categories];
+            // Swap the elements at currentIndex and otherIndex
+            [newOrder[currentIndex], newOrder[otherIndex]] = [newOrder[otherIndex], newOrder[currentIndex]];
+
+            // Now, create a batch write to update Firestore priorities based on the new array indices
+            const batch = writeBatch(db);
+            newOrder.forEach((category, index) => {
+                // Only write if the priority is different from the new index to save writes
+                if (category.priority !== index) {
+                    const docRef = doc(db, "categories", category.id);
+                    batch.update(docRef, { priority: index });
+                }
+            });
+
+            try {
+                await batch.commit();
+            } catch (err) {
+                console.error("카테고리 순서 변경 실패:", err);
+            }
         };
 
         const setupEventListeners = () => {
@@ -501,7 +561,22 @@
 
                 const deleteCategoryBtn = e.target.closest('.delete-category-btn');
                 if (deleteCategoryBtn) {
-                    openDeleteConfirmModal(deleteCategoryBtn.dataset.id, 'category');
+                    const categoryId = deleteCategoryBtn.closest('[data-id]').dataset.id;
+                    openDeleteConfirmModal(categoryId, 'category');
+                    return;
+                }
+                
+                const moveUpBtn = e.target.closest('.move-category-up-btn');
+                if (moveUpBtn) {
+                    const categoryId = moveUpBtn.closest('[data-id]').dataset.id;
+                    handleCategoryPriorityChange(categoryId, 'up');
+                    return;
+                }
+
+                const moveDownBtn = e.target.closest('.move-category-down-btn');
+                if (moveDownBtn) {
+                    const categoryId = moveDownBtn.closest('[data-id]').dataset.id;
+                    handleCategoryPriorityChange(categoryId, 'down');
                     return;
                 }
                 
@@ -518,19 +593,13 @@
             });
 
             document.getElementById('prev-btn').addEventListener('click', () => {
-                if(state.viewMode === 'week') {
-                    state.viewDate.setDate(state.viewDate.getDate() - 7);
-                } else {
-                    state.viewDate.setMonth(state.viewDate.getMonth() - 1);
-                }
+                if(state.viewMode === 'week') state.viewDate.setDate(state.viewDate.getDate() - 7);
+                else state.viewDate.setMonth(state.viewDate.getMonth() - 1);
                 renderAll();
             });
             document.getElementById('next-btn').addEventListener('click', () => {
-                if(state.viewMode === 'week') {
-                    state.viewDate.setDate(state.viewDate.getDate() + 7);
-                } else {
-                    state.viewDate.setMonth(state.viewDate.getMonth() + 1);
-                }
+                if(state.viewMode === 'week') state.viewDate.setDate(state.viewDate.getDate() + 7);
+                else state.viewDate.setMonth(state.viewDate.getMonth() + 1);
                 renderAll();
             });
             document.getElementById('today-btn').addEventListener('click', () => {
@@ -538,14 +607,8 @@
                 renderAll();
             });
             
-            document.getElementById('view-week-btn').addEventListener('click', () => {
-                state.viewMode = 'week';
-                renderAll();
-            });
-             document.getElementById('view-month-btn').addEventListener('click', () => {
-                state.viewMode = 'month';
-                renderAll();
-            });
+            document.getElementById('view-week-btn').addEventListener('click', () => { state.viewMode = 'week'; renderAll(); });
+            document.getElementById('view-month-btn').addEventListener('click', () => { state.viewMode = 'month'; renderAll(); });
 
 
             document.getElementById('manage-category-btn').addEventListener('click', () => openModal(DOM.categoryModal));
@@ -560,9 +623,7 @@
                     document.getElementById('end-date-wrapper').classList.toggle('hidden', !isCompleted);
                     if (isCompleted) {
                         const endDateInput = document.getElementById('task-end-date');
-                        if (!endDateInput.value) {
-                            endDateInput.value = formatDate(new Date());
-                        }
+                        if (!endDateInput.value) endDateInput.value = formatDate(new Date());
                     }
                 });
             });
@@ -571,8 +632,7 @@
                 const html = document.documentElement;
                 html.classList.toggle('dark');
                 localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
-                DOM.darkModeToggle.querySelector('i').classList.toggle('fa-sun', !html.classList.contains('dark'));
-                DOM.darkModeToggle.querySelector('i').classList.toggle('fa-moon', html.classList.contains('dark'));
+                DOM.darkModeToggle.querySelector('i').className = html.classList.contains('dark') ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
             });
         };
 
@@ -587,9 +647,10 @@
                 }
             };
             
-            onSnapshot(query(collection(db, "categories"), orderBy("createdAt")), snapshot => {
+            // Remove orderBy to fetch all categories regardless of whether they have a priority field.
+            onSnapshot(query(collection(db, "categories")), snapshot => {
                 state.categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderCategoryList(state.categories);
+                renderCategoryList();
                 categoriesLoaded = true;
                 combineAndRender();
             });
@@ -619,9 +680,13 @@
             if (snapshot.empty) {
                 const batch = writeBatch(db);
                 const defaultCategories = ['Frontend', 'Backend', 'Design', '기본'];
-                defaultCategories.forEach(name => {
+                defaultCategories.forEach((name, index) => {
                     const docRef = doc(categoriesRef);
-                    batch.set(docRef, { name, createdAt: serverTimestamp() });
+                    batch.set(docRef, { 
+                        name, 
+                        createdAt: serverTimestamp(),
+                        priority: index
+                    });
                 });
                 await batch.commit();
             }

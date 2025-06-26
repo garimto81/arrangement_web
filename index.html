@@ -428,7 +428,7 @@
             if (task) {
                 document.getElementById('task-modal-title').textContent = '업무 수정';
                 document.getElementById('task-id').value = task.id;
-                document.getElementById('task-source').value = task.source;
+                document.getElementById('task-source').value = task.source; // 데이터 소스 설정
                 taskCategory.value = task.category;
                 document.getElementById('task-title').value = task.title;
                 document.getElementById('task-url').value = task.url || '';
@@ -482,16 +482,23 @@
             closeModal(DOM.taskModal);
             
             try {
-                if (id && source === 'old') {
-                    const batch = writeBatch(db);
-                    const newTasksRef = doc(collection(db, "tasks"));
-                    batch.set(newTasksRef, { ...data, createdAt: serverTimestamp() });
-                    const oldTaskRef = doc(db, `artifacts/${appId}/public/data/work-pages`, id);
-                    batch.delete(oldTaskRef);
-                    await batch.commit();
-                } else if (id) {
-                    await updateDoc(doc(db, "tasks", id), data);
+                if (id) {
+                    if (source === 'old') {
+                        // Migrate-on-Write: 과거 데이터를 새 위치에 쓰고, 이전 위치에서 삭제
+                        const batch = writeBatch(db);
+                        const newTaskRef = doc(db, "tasks", id); // 동일한 ID로 새 위치에 문서 생성
+                        batch.set(newTaskRef, { ...data, createdAt: serverTimestamp() });
+                        
+                        const oldTaskRef = doc(db, `artifacts/${appId}/public/data/work-pages`, id);
+                        batch.delete(oldTaskRef);
+                        
+                        await batch.commit();
+                    } else {
+                        // 'tasks' 컬렉션의 기존 문서 업데이트
+                        await updateDoc(doc(db, "tasks", id), data);
+                    }
                 } else {
+                    // 새 업무 추가
                     data.createdAt = serverTimestamp();
                     await addDoc(collection(db, "tasks"), data);
                 }

@@ -184,7 +184,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, enableIndexedDbPersistence, orderBy, getDocs, writeBatch, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // 수정: orderBy 함수를 import 목록에 추가
+        import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, orderBy, getDocs, writeBatch, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const ASSIGNEES = { 
             "Aiden Kim": {i:"A", c:"bg-blue-500"}, "Matthew Kim": {i:"M", c:"bg-green-500"}, 
@@ -221,7 +222,7 @@
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            enableIndexedDbPersistence(db).catch(console.warn);
+            // enableIndexedDbPersistence(db).catch(console.warn);
 
         } catch (error) {
             console.error("Firebase 초기화 실패:", error);
@@ -428,7 +429,7 @@
             if (task) {
                 document.getElementById('task-modal-title').textContent = '업무 수정';
                 document.getElementById('task-id').value = task.id;
-                document.getElementById('task-source').value = task.source; // 데이터 소스 설정
+                document.getElementById('task-source').value = task.source;
                 taskCategory.value = task.category;
                 document.getElementById('task-title').value = task.title;
                 document.getElementById('task-url').value = task.url || '';
@@ -484,9 +485,8 @@
             try {
                 if (id) {
                     if (source === 'old') {
-                        // Migrate-on-Write: 과거 데이터를 새 위치에 쓰고, 이전 위치에서 삭제
                         const batch = writeBatch(db);
-                        const newTaskRef = doc(db, "tasks", id); // 동일한 ID로 새 위치에 문서 생성
+                        const newTaskRef = doc(db, "tasks", id);
                         batch.set(newTaskRef, { ...data, createdAt: serverTimestamp() });
                         
                         const oldTaskRef = doc(db, `artifacts/${appId}/public/data/work-pages`, id);
@@ -494,11 +494,9 @@
                         
                         await batch.commit();
                     } else {
-                        // 'tasks' 컬렉션의 기존 문서 업데이트
                         await updateDoc(doc(db, "tasks", id), data);
                     }
                 } else {
-                    // 새 업무 추가
                     data.createdAt = serverTimestamp();
                     await addDoc(collection(db, "tasks"), data);
                 }

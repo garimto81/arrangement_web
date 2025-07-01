@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드</title>
+    <title>GGP CAMERA 업무 현황 보드 ver 1.00</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -61,9 +61,14 @@
             background-color: #4f46e5; /* indigo-600 */
             color: white;
         }
-        /* 카테고리 순서 변경 버튼 숨김 처리 */
-        .priority-btn.hidden {
+        .priority-btn.hidden, .category-action-btn.hidden {
             visibility: hidden;
+        }
+        .category-toggle-btn {
+            transition: transform 0.2s;
+        }
+        .category-toggle-btn.collapsed {
+            transform: rotate(-90deg);
         }
     </style>
 </head>
@@ -109,12 +114,13 @@
 
     </div>
 
-    <!-- Modals (unchanged except category-modal) -->
+    <!-- Modals -->
     <div id="task-modal" role="dialog" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6"></h3>
             <form id="task-form">
-                <input type="hidden" id="task-id"><input type="hidden" id="task-source">
+                <input type="hidden" id="task-id">
+                <input type="hidden" id="task-source">
                 <div class="mb-4">
                     <label for="task-category" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">카테고리</label>
                     <select id="task-category" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-indigo-500 focus:border-indigo-500" required></select>
@@ -180,11 +186,19 @@
             </div>
         </div>
     </div>
+    
+    <div id="info-modal" role="alert" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm p-6 text-center">
+            <p id="info-modal-message" class="text-gray-700 dark:text-gray-200 mb-6 text-lg"></p>
+            <button id="info-modal-close-btn" class="px-6 py-2 rounded-md bg-indigo-600 text-white">확인</button>
+        </div>
+    </div>
+
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, enableIndexedDbPersistence, orderBy, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, orderBy, getDocs, writeBatch, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const ASSIGNEES = { 
             "Aiden Kim": {i:"A", c:"bg-blue-500"}, "Matthew Kim": {i:"M", c:"bg-green-500"}, 
@@ -195,14 +209,15 @@
             taskModal: document.getElementById('task-modal'),
             categoryModal: document.getElementById('category-modal'),
             deleteModal: document.getElementById('delete-confirm-modal'),
+            infoModal: document.getElementById('info-modal'),
             taskForm: document.getElementById('task-form'),
             categoryList: document.getElementById('category-list'),
             darkModeToggle: document.getElementById('dark-mode-toggle'),
         };
         
         let db, auth, userId, appId;
-        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), viewMode: 'month' };
-
+        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), viewMode: 'month', collapsedCategories: [] };
+        
         try {
             const firebaseConfig = {
               apiKey: "AIzaSyD6LVOtT0x30CQNZDt5aSUEBKT8vXPhM6k",
@@ -221,17 +236,20 @@
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            enableIndexedDbPersistence(db).catch(console.warn);
 
         } catch (error) {
             console.error("Firebase 초기화 실패:", error);
             document.body.innerHTML = `<div class="fixed inset-0 bg-red-100 text-red-800 flex items-center justify-center p-4 text-center"><p>${error.message}</p></div>`;
         }
 
+
         const formatDate = (date) => {
-            const year = date.getFullYear();
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const day = date.getDate().toString().padStart(2, '0');
+            if (!date) return '';
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0); // 시간 정보를 제거하여 날짜만 비교
+            const year = d.getFullYear();
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const day = d.getDate().toString().padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
         
@@ -240,22 +258,25 @@
         };
 
         const renderTimeline = () => {
-            const { tasks, viewDate, viewMode } = state;
+            const { tasks, viewDate, viewMode, collapsedCategories } = state;
             const sortedCategories = getSortedCategories();
             const isMobile = window.innerWidth < 768;
 
             let startDate, endDate;
             if (viewMode === 'week') {
                 startDate = new Date(viewDate);
+                startDate.setHours(0,0,0,0);
                 startDate.setDate(startDate.getDate() - startDate.getDay());
                 endDate = new Date(startDate);
                 endDate.setDate(startDate.getDate() + 6);
-                document.getElementById('current-range-display').textContent = `${startDate.toLocaleDateString('ko-KR')} ~ ${endDate.toLocaleDateString('ko-KR')}`;
             } else { 
                 startDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
                 endDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
-                document.getElementById('current-range-display').textContent = `${viewDate.getFullYear()}년 ${viewDate.getMonth() + 1}월`;
             }
+            document.getElementById('current-range-display').textContent = viewMode === 'week' 
+                ? `${startDate.toLocaleDateString('ko-KR')} ~ ${endDate.toLocaleDateString('ko-KR')}`
+                : `${viewDate.getFullYear()}년 ${viewDate.getMonth() + 1}월`;
+
 
             const dateArray = [];
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -284,33 +305,85 @@
             sortedCategories.forEach(cat => {
                 const categoryTasks = tasks.filter(t => t.category === cat.name).sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
                 
-                if (cat.name === '기본' && categoryTasks.length === 0) {
-                    return;
-                }
+                if (cat.name === '기본' && categoryTasks.length === 0) return;
+                
+                const isCollapsed = collapsedCategories.includes(cat.name);
 
+                // --- 수정: 카테고리 헤더를 2열 그리드로 변경 ---
                 const categoryRow = document.createElement('div');
                 categoryRow.className = 'grid';
                 categoryRow.style.gridTemplateColumns = '200px 1fr';
-                categoryRow.innerHTML = `<div class="sticky left-0 z-10 bg-gray-100 dark:bg-gray-700/80 font-bold p-2 text-sm border-b border-r border-gray-300 dark:border-gray-600 col-span-2">${cat.name}</div>`;
-                timelineGrid.appendChild(categoryRow);
                 
+                const categoryTitleCell = document.createElement('div');
+                categoryTitleCell.className = 'sticky left-0 z-10 bg-gray-100 dark:bg-gray-700/80 p-2 text-sm border-b border-r border-gray-300 dark:border-gray-600 flex items-center gap-2';
+                categoryTitleCell.innerHTML = `
+                    <button class="category-toggle-btn w-6 h-6 flex items-center justify-center rounded hover:bg-gray-300 dark:hover:bg-gray-600 ${isCollapsed ? 'collapsed' : ''}" data-category-name="${cat.name}">
+                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                    </button>
+                    <span class="font-bold">${cat.name}</span>`;
+                
+                const categoryTimelineCell = document.createElement('div');
+                categoryTimelineCell.className = 'relative border-b border-gray-300 dark:border-gray-600';
+                
+                categoryRow.appendChild(categoryTitleCell);
+                categoryRow.appendChild(categoryTimelineCell);
+                timelineGrid.appendChild(categoryRow);
+
+                // --- 기능 추가: 카테고리 요약 바 계산 및 렌더링 ---
+                if (categoryTasks.length > 0) {
+                    let minCategoryDate = new Date(categoryTasks[0].startDate);
+                    let maxCategoryDate = null;
+                    let totalDuration = 0;
+
+                    categoryTasks.forEach(task => {
+                        const taskStart = new Date(task.startDate);
+                        if (taskStart < minCategoryDate) minCategoryDate = taskStart;
+                        
+                        const taskEnd = task.status === 'completed' && task.endDate 
+                            ? new Date(task.endDate) 
+                            : new Date(todayStr);
+
+                        if (!maxCategoryDate || taskEnd > maxCategoryDate) maxCategoryDate = taskEnd;
+                        
+                        const duration = Math.max(1, Math.round((taskEnd - taskStart) / (1000 * 60 * 60 * 24)) + 1);
+                        totalDuration += duration;
+                    });
+                    
+                    const startMs = startDate.getTime();
+                    const endMs = endDate.getTime();
+                    
+                    if (maxCategoryDate.getTime() >= startMs && minCategoryDate.getTime() <= endMs) {
+                        const leftOffset = (Math.max(minCategoryDate.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
+                        const rightOffset = (Math.min(maxCategoryDate.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
+                        const left = (leftOffset / daysInRange) * 100;
+                        const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
+
+                        const categoryBar = document.createElement('div');
+                        categoryBar.className = 'absolute h-4 top-1/2 -translate-y-1/2 bg-gray-400 dark:bg-gray-500 rounded flex items-center justify-center text-white text-xs font-semibold';
+                        categoryBar.style.left = `${left}%`;
+                        categoryBar.style.width = `${width}%`;
+                        categoryBar.innerHTML = `${totalDuration}일`;
+                        categoryTimelineCell.appendChild(categoryBar);
+                    }
+                }
+
                 if (categoryTasks.length > 0) {
                     categoryTasks.forEach(task => {
                         const taskRow = document.createElement('div');
-                        taskRow.className = 'task-row grid';
+                        taskRow.className = `task-row grid ${isCollapsed ? 'hidden' : ''}`;
                         taskRow.style.gridTemplateColumns = '200px 1fr';
                         taskRow.dataset.taskId = task.id;
                         taskRow.dataset.taskSource = task.source;
 
                         taskRow.innerHTML = `<div class="task-row-title sticky left-0 z-10 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-start text-sm">
-                                            <div class="flex-grow">
-                                                <a href="${task.url || '#'}" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
-                                            </div>
-                                            <div class="task-actions">
-                                                <button class="edit-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
-                                                <button class="delete-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs text-red-500"></i></button>
-                                            </div>
-                                       </div>`;
+                                                <div class="flex-grow">
+                                                    <a href="${task.url || '#'}" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" ${!task.url ? 'onclick="return false;"' : ''}>${task.title}</a>
+                                                </div>
+                                                <div class="task-actions">
+                                                    <button class="edit-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-pencil text-xs"></i></button>
+                                                    <button class="delete-task-btn w-6 h-6 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"><i class="fa-solid fa-trash-can text-xs text-red-500"></i></button>
+                                                </div>
+                                            </div>`;
                         
                         const timelineCell = document.createElement('div');
                         timelineCell.className = 'relative border-b border-gray-200 dark:border-gray-600/50 grid';
@@ -323,28 +396,20 @@
                             const isWeekend = dateArray[i].getDay() === 0 || dateArray[i].getDay() === 6;
                             
                             let bgClass = isWeekend ? 'bg-gray-50 dark:bg-gray-800/40' : '';
-                            if (isToday) {
-                                bgClass = 'bg-indigo-100 dark:bg-indigo-900/30';
-                            }
+                            if (isToday) bgClass = 'bg-indigo-100 dark:bg-indigo-900/30';
                             bgCell.className = `border-r border-gray-200 dark:border-gray-600/50 ${bgClass}`;
                             timelineCell.appendChild(bgCell);
                         }
 
-                        const taskStart = new Date(task.startDate + 'T00:00:00');
-                        
-                        let taskEnd;
-                        if (task.status === 'completed') {
-                            taskEnd = task.endDate ? new Date(task.endDate + 'T00:00:00') : taskStart;
-                        } else {
-                            taskEnd = new Date(todayStr + 'T00:00:00');
-                        }
+                        const taskStartDt = new Date(task.startDate);
+                        const taskEndDt = task.status === 'completed' && task.endDate ? new Date(task.endDate) : new Date(todayStr);
                         
                         const startMs = startDate.getTime();
                         const endMs = endDate.getTime();
 
-                        if (taskEnd.getTime() >= startMs && taskStart.getTime() <= endMs) {
-                            const leftOffset = (Math.max(taskStart.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
-                            const rightOffset = (Math.min(taskEnd.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
+                        if (taskEndDt.getTime() >= startMs && taskStartDt.getTime() <= endMs) {
+                            const leftOffset = (Math.max(taskStartDt.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
+                            const rightOffset = (Math.min(taskEndDt.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
                             const left = (leftOffset / daysInRange) * 100;
                             const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
 
@@ -364,7 +429,7 @@
                         taskRow.appendChild(timelineCell);
                         timelineGrid.appendChild(taskRow);
                     });
-                } else {
+                } else if (!isCollapsed) {
                     const emptyRow = document.createElement('div');
                     emptyRow.className = 'grid';
                     emptyRow.style.gridTemplateColumns = '200px 1fr';
@@ -382,14 +447,21 @@
 
             DOM.categoryList.innerHTML = sortedCategories.map((c, index) => `
                 <div class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md" data-id="${c.id}">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 flex-grow">
                          <div class="flex flex-col">
                             <button class="priority-btn move-category-up-btn ${index === 0 ? 'hidden' : ''}" aria-label="위로 이동"><i class="fa-solid fa-caret-up"></i></button>
                             <button class="priority-btn move-category-down-btn ${index === sortedCategories.length - 1 ? 'hidden' : ''}" aria-label="아래로 이동"><i class="fa-solid fa-caret-down"></i></button>
                          </div>
-                         <span class="font-medium">${c.name}</span>
+                         <div class="category-name-wrapper flex-grow">
+                            <span class="font-medium category-name-text">${c.name}</span>
+                            <input type="text" value="${c.name}" class="hidden category-name-input w-full bg-white dark:bg-gray-800 px-1 rounded-sm border border-indigo-500">
+                         </div>
                     </div>
-                    <button class="delete-category-btn w-7 h-7 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500"><i class="fa-solid fa-trash-can text-sm"></i></button>
+                    <div class="flex items-center gap-1">
+                        <button class="category-action-btn edit-category-btn w-7 h-7 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><i class="fa-solid fa-pencil text-sm"></i></button>
+                        <button class="category-action-btn save-category-btn hidden w-7 h-7 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><i class="fa-solid fa-check text-sm text-green-500"></i></button>
+                        <button class="delete-category-btn w-7 h-7 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500"><i class="fa-solid fa-trash-can text-sm"></i></button>
+                    </div>
                 </div>`).join('') || '<p class="text-center text-sm text-gray-400">카테고리가 없습니다.</p>';
         };
 
@@ -407,6 +479,11 @@
 
         const openModal = (modal) => modal.classList.remove('hidden');
         const closeModal = (modal) => modal.classList.add('hidden');
+        
+        const showInfo = (message) => {
+            document.getElementById('info-modal-message').textContent = message;
+            openModal(DOM.infoModal);
+        };
 
         const openTaskModal = (task = null) => {
             DOM.taskForm.reset();
@@ -425,12 +502,19 @@
                 document.getElementById('task-url').value = task.url || '';
                 taskName.value = task.name;
                 document.getElementById('task-start-date').value = task.startDate;
-                document.querySelector(`input[name="task-status"][value="${task.status}"]`).checked = true;
-                const isCompleted = task.status === 'completed';
+                document.querySelector(`input[name="task-status"][value="${task.status ?? 'inProgress'}"]`).checked = true;
+                
+                const isCompleted = (task.status === 'completed');
                 document.getElementById('end-date-wrapper').classList.toggle('hidden', !isCompleted);
-                if(isCompleted) document.getElementById('task-end-date').value = task.endDate;
+                
+                if (isCompleted) {
+                    document.getElementById('task-end-date').value = task.endDate;
+                }
+
             } else {
                 document.getElementById('task-modal-title').textContent = '새 업무 추가';
+                document.getElementById('task-id').value = '';
+                document.getElementById('task-source').value = 'new';
                 document.getElementById('task-start-date').valueAsDate = new Date();
                 document.querySelector('input[name="task-status"][value="inProgress"]').checked = true;
                 document.getElementById('end-date-wrapper').classList.add('hidden');
@@ -438,7 +522,7 @@
             openModal(DOM.taskModal);
         };
 
-        const openDeleteConfirmModal = (id, type, source = null) => {
+        const openDeleteConfirmModal = (id, type, source) => {
             state.itemToDelete = { id, type, source };
             document.getElementById('delete-confirm-title').textContent = type === 'task' ? '업무 삭제' : '카테고리 삭제';
             document.getElementById('delete-confirm-message').textContent = `정말로 이 ${type === 'task' ? '업무' : '카테고리'}를 삭제하시겠습니까?`;
@@ -450,6 +534,7 @@
             const id = document.getElementById('task-id').value;
             const source = document.getElementById('task-source').value;
             const status = document.querySelector('input[name="task-status"]:checked').value;
+
             const data = {
                 category: document.getElementById('task-category').value,
                 title: document.getElementById('task-title').value.trim(),
@@ -457,27 +542,42 @@
                 name: document.getElementById('task-name').value,
                 startDate: document.getElementById('task-start-date').value,
                 status: status,
-                endDate: status === 'completed' ? document.getElementById('task-end-date').value : null,
+                endDate: status === 'completed'
+                    ? (document.getElementById('task-end-date').value || formatDate(new Date()))
+                    : null,
             };
-            if (!data.endDate && status === 'completed') data.endDate = formatDate(new Date());
+
             closeModal(DOM.taskModal);
             
             try {
                 if (id) {
-                    const collectionPath = source === 'old' ? `artifacts/${appId}/public/data/work-pages` : "tasks";
-                    await updateDoc(doc(db, collectionPath, id), data);
+                    if (source === 'old') {
+                        const batch = writeBatch(db);
+                        const newTaskRef = doc(db, "tasks", id);
+                        batch.set(newTaskRef, { ...data, createdAt: serverTimestamp() });
+                        
+                        const oldTaskRef = doc(db, `artifacts/${appId}/public/data/work-pages`, id);
+                        batch.delete(oldTaskRef);
+                        
+                        await batch.commit();
+                    } else {
+                        await updateDoc(doc(db, "tasks", id), data);
+                    }
                 } else {
                     data.createdAt = serverTimestamp();
                     await addDoc(collection(db, "tasks"), data);
                 }
-            } catch(err) { console.error("업무 저장 실패:", err); alert("업무 저장에 실패했습니다.");}
+            } catch(err) { 
+                console.error("업무 저장 실패:", err); 
+                showInfo("업무 저장에 실패했습니다.");
+            }
         };
 
         const handleAddCategoryFormSubmit = async (e) => {
             e.preventDefault();
             const input = document.getElementById('new-category-name');
             const name = input.value.trim();
-            if (name && !state.categories.some(c => c.name === name)) {
+            if (name && !state.categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
                 const newPriority = state.categories.length > 0 ? Math.max(...state.categories.map(c => c.priority ?? 0)) + 1 : 0;
                 await addDoc(collection(db, "categories"), { 
                     name, 
@@ -486,7 +586,7 @@
                 });
                 input.value = '';
             } else if (name) {
-                alert("이미 존재하는 카테고리입니다.");
+                showInfo("이미 존재하는 카테고리입니다.");
             }
         };
 
@@ -497,7 +597,7 @@
 
             try {
                 if (type === 'task') {
-                    const collectionPath = source === 'old' ? `artifacts/${appId}/public/data/work-pages` : "tasks";
+                    const collectionPath = source === 'old' ? `artifacts/${appId}/public/data/work-pages` : 'tasks';
                     await deleteDoc(doc(db, collectionPath, id));
                 } else if (type === 'category') {
                     await deleteDoc(doc(db, "categories", id));
@@ -511,34 +611,59 @@
             
             if (currentIndex === -1) return;
             
-            let otherIndex;
-            if (direction === 'up' && currentIndex > 0) {
-                otherIndex = currentIndex - 1;
-            } else if (direction === 'down' && currentIndex < categories.length - 1) {
-                otherIndex = currentIndex + 1;
-            } else {
-                return;
-            }
-
-            // Create the new visual order in memory
             const newOrder = [...categories];
-            // Swap the elements at currentIndex and otherIndex
-            [newOrder[currentIndex], newOrder[otherIndex]] = [newOrder[otherIndex], newOrder[currentIndex]];
+            const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
-            // Now, create a batch write to update Firestore priorities based on the new array indices
+            if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+
+            [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]];
+
             const batch = writeBatch(db);
             newOrder.forEach((category, index) => {
-                // Only write if the priority is different from the new index to save writes
-                if (category.priority !== index) {
-                    const docRef = doc(db, "categories", category.id);
-                    batch.update(docRef, { priority: index });
-                }
+                const docRef = doc(db, "categories", category.id);
+                batch.update(docRef, { priority: index });
             });
 
             try {
                 await batch.commit();
             } catch (err) {
                 console.error("카테고리 순서 변경 실패:", err);
+            }
+        };
+        
+        const handleCategoryNameUpdate = async (categoryId, newName) => {
+            const oldCategory = state.categories.find(c => c.id === categoryId);
+            if (!oldCategory || !newName || oldCategory.name === newName) {
+                 renderCategoryList();
+                 return; 
+            }
+
+            if (state.categories.some(c => c.name.toLowerCase() === newName.toLowerCase() && c.id !== categoryId)) {
+                showInfo("이미 존재하는 카테고리 이름입니다.");
+                renderCategoryList();
+                return;
+            }
+
+            const batch = writeBatch(db);
+            const categoryRef = doc(db, "categories", categoryId);
+            batch.update(categoryRef, { name: newName });
+            
+            const tasksQuery1 = query(collection(db, "tasks"), where("category", "==", oldCategory.name));
+            const tasksQuery2 = query(collection(db, `artifacts/${appId}/public/data/work-pages`), where("category", "==", oldCategory.name));
+
+            try {
+                const [tasksSnapshot1, tasksSnapshot2] = await Promise.all([
+                    getDocs(tasksQuery1),
+                    getDocs(tasksQuery2)
+                ]);
+
+                tasksSnapshot1.forEach(taskDoc => batch.update(taskDoc.ref, { category: newName }));
+                tasksSnapshot2.forEach(taskDoc => batch.update(taskDoc.ref, { category: newName }));
+
+                await batch.commit();
+            } catch (err) {
+                console.error("카테고리 이름 변경 실패:", err);
+                showInfo("카테고리 이름 변경에 실패했습니다.");
             }
         };
 
@@ -558,40 +683,63 @@
                     openDeleteConfirmModal(taskRow.dataset.taskId, 'task', taskRow.dataset.taskSource);
                     return;
                 }
-
-                const deleteCategoryBtn = e.target.closest('.delete-category-btn');
-                if (deleteCategoryBtn) {
-                    const categoryId = deleteCategoryBtn.closest('[data-id]').dataset.id;
-                    openDeleteConfirmModal(categoryId, 'category');
-                    return;
-                }
                 
-                const moveUpBtn = e.target.closest('.move-category-up-btn');
-                if (moveUpBtn) {
-                    const categoryId = moveUpBtn.closest('[data-id]').dataset.id;
-                    handleCategoryPriorityChange(categoryId, 'up');
-                    return;
-                }
-
-                const moveDownBtn = e.target.closest('.move-category-down-btn');
-                if (moveDownBtn) {
-                    const categoryId = moveDownBtn.closest('[data-id]').dataset.id;
-                    handleCategoryPriorityChange(categoryId, 'down');
-                    return;
-                }
-                
-                const closeModalBtn = e.target.closest('.close-modal-btn');
-                if(closeModalBtn) {
-                    closeModal(closeModalBtn.closest('.fixed'));
-                    return;
-                }
-                
-                if(e.target.matches('.fixed[role="dialog"]')) {
-                    closeModal(e.target);
+                const toggleBtn = e.target.closest('.category-toggle-btn');
+                if (toggleBtn) {
+                    const categoryName = toggleBtn.dataset.categoryName;
+                    const index = state.collapsedCategories.indexOf(categoryName);
+                    if (index > -1) {
+                        state.collapsedCategories.splice(index, 1);
+                    } else {
+                        state.collapsedCategories.push(categoryName);
+                    }
+                    renderAll();
                     return;
                 }
             });
 
+            DOM.categoryList.addEventListener('click', e => {
+                const target = e.target;
+                const categoryItem = target.closest('[data-id]');
+                if (!categoryItem) return;
+                
+                const categoryId = categoryItem.dataset.id;
+                
+                if (target.closest('.edit-category-btn')) {
+                    categoryItem.querySelector('.category-name-text').classList.add('hidden');
+                    categoryItem.querySelector('.category-name-input').classList.remove('hidden');
+                    categoryItem.querySelector('.edit-category-btn').classList.add('hidden');
+                    categoryItem.querySelector('.save-category-btn').classList.remove('hidden');
+                    categoryItem.querySelector('.category-name-input').focus();
+                }
+                else if (target.closest('.save-category-btn')) {
+                    const newName = categoryItem.querySelector('.category-name-input').value.trim();
+                    handleCategoryNameUpdate(categoryId, newName);
+                }
+                else if (target.closest('.delete-category-btn')) {
+                    openDeleteConfirmModal(categoryId, 'category');
+                }
+                else if (target.closest('.move-category-up-btn')) {
+                    handleCategoryPriorityChange(categoryId, 'up');
+                }
+                else if (target.closest('.move-category-down-btn')) {
+                    handleCategoryPriorityChange(categoryId, 'down');
+                }
+            });
+            
+            DOM.categoryList.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    const input = e.target.closest('.category-name-input');
+                    if (input && !input.classList.contains('hidden')) {
+                        e.preventDefault();
+                        const categoryItem = input.closest('[data-id]');
+                        const categoryId = categoryItem.dataset.id;
+                        const newName = input.value.trim();
+                        handleCategoryNameUpdate(categoryId, newName);
+                    }
+                }
+            });
+            
             document.getElementById('prev-btn').addEventListener('click', () => {
                 if(state.viewMode === 'week') state.viewDate.setDate(state.viewDate.getDate() - 7);
                 else state.viewDate.setMonth(state.viewDate.getMonth() - 1);
@@ -617,6 +765,13 @@
             document.getElementById('add-category-form').addEventListener('submit', handleAddCategoryFormSubmit);
             DOM.taskForm.addEventListener('submit', handleTaskFormSubmit);
 
+            document.querySelectorAll('.close-modal-btn').forEach(btn => {
+                btn.addEventListener('click', () => closeModal(btn.closest('.fixed')));
+            });
+            
+            document.getElementById('info-modal-close-btn').addEventListener('click', () => closeModal(DOM.infoModal));
+
+
             DOM.taskForm.querySelectorAll('input[name="task-status"]').forEach(radio => {
                 radio.addEventListener('change', e => {
                     const isCompleted = e.target.value === 'completed';
@@ -637,18 +792,17 @@
         };
 
         const setupDataListeners = () => {
-            let categoriesLoaded = false, newTasksLoaded = false, oldTasksLoaded = false;
+            let categoriesLoaded = false, tasksLoaded = false, oldTasksLoaded = false;
             let newTasks = [], oldTasks = [];
-            
+
             const combineAndRender = () => {
-                if (categoriesLoaded && newTasksLoaded && oldTasksLoaded) {
+                if (categoriesLoaded && tasksLoaded && oldTasksLoaded) {
                      state.tasks = [...newTasks, ...oldTasks];
                      renderAll();
                 }
             };
-            
-            // Remove orderBy to fetch all categories regardless of whether they have a priority field.
-            onSnapshot(query(collection(db, "categories")), snapshot => {
+
+            onSnapshot(query(collection(db, "categories"), orderBy("priority")), snapshot => {
                 state.categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderCategoryList();
                 categoriesLoaded = true;
@@ -660,14 +814,24 @@
                     const data = doc.data();
                     return { id: doc.id, source: 'new', ...data, category: data.category || '기본' };
                 });
-                newTasksLoaded = true;
+                tasksLoaded = true;
                 combineAndRender();
             });
 
             onSnapshot(collection(db, `artifacts/${appId}/public/data/work-pages`), snapshot => {
                 oldTasks = snapshot.docs.map(doc => {
                     const data = doc.data();
-                    return { id: doc.id, source: 'old', ...data, category: data.category || '기본', status: 'completed', endDate: data.date, startDate: data.date };
+                    return { 
+                        id: doc.id, 
+                        source: 'old', 
+                        category: data.category || '기본', 
+                        title: data.title,
+                        url: data.url,
+                        name: data.name,
+                        startDate: data.date,
+                        status: data.status || 'completed',
+                        endDate: data.endDate || data.date
+                    };
                 });
                 oldTasksLoaded = true;
                 combineAndRender();
@@ -701,6 +865,7 @@
             }
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
+                    userId = user.uid;
                     if (!state.isAuthReady) {
                         state.isAuthReady = true;
                         await initializeDefaultCategories();
@@ -712,8 +877,9 @@
                 }
             });
         };
-
+        
         init();
+
     </script>
 </body>
 </html>

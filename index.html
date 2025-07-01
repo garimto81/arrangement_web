@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 ver 1.00</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.01</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -96,10 +96,6 @@
 
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
             <div id="timeline-controls" class="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
-                 <div class="flex items-center gap-2 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
-                     <button id="view-week-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">주</button>
-                     <button id="view-month-btn" class="view-toggle-btn px-3 py-1 rounded-md text-sm font-medium">월</button>
-                 </div>
                 <h2 id="current-range-display" class="text-lg sm:text-xl font-bold text-gray-700 dark:text-gray-200 order-first sm:order-none"></h2>
                 <div class="flex items-center gap-2">
                     <button id="prev-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">&lt; 이전</button>
@@ -216,7 +212,7 @@
         };
         
         let db, auth, userId, appId;
-        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), viewMode: 'month', collapsedCategories: [] };
+        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), collapsedCategories: [] };
         
         try {
             const firebaseConfig = {
@@ -258,25 +254,20 @@
         };
 
         const renderTimeline = () => {
-            const { tasks, viewDate, viewMode, collapsedCategories } = state;
+            const { tasks, viewDate, collapsedCategories } = state;
             const sortedCategories = getSortedCategories();
-            const isMobile = window.innerWidth < 768;
+            
+            // --- 수정: 오늘 기준 앞뒤 15일로 날짜 범위 계산 ---
+            const centerDate = new Date(viewDate);
+            const startDate = new Date(centerDate);
+            startDate.setDate(centerDate.getDate() - 15);
+            startDate.setHours(0,0,0,0);
 
-            let startDate, endDate;
-            if (viewMode === 'week') {
-                startDate = new Date(viewDate);
-                startDate.setHours(0,0,0,0);
-                startDate.setDate(startDate.getDate() - startDate.getDay());
-                endDate = new Date(startDate);
-                endDate.setDate(startDate.getDate() + 6);
-            } else { 
-                startDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
-                endDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
-            }
-            document.getElementById('current-range-display').textContent = viewMode === 'week' 
-                ? `${startDate.toLocaleDateString('ko-KR')} ~ ${endDate.toLocaleDateString('ko-KR')}`
-                : `${viewDate.getFullYear()}년 ${viewDate.getMonth() + 1}월`;
+            const endDate = new Date(centerDate);
+            endDate.setDate(centerDate.getDate() + 15);
+            endDate.setHours(0,0,0,0);
 
+            document.getElementById('current-range-display').textContent = `${startDate.toLocaleDateString('ko-KR')} ~ ${endDate.toLocaleDateString('ko-KR')}`;
 
             const dateArray = [];
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -295,8 +286,8 @@
                 const isToday = formatDate(d) === todayStr;
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                 headerHtml += `<div class="text-center p-1 border-b border-l border-gray-300 dark:border-gray-600 ${isToday ? 'bg-indigo-600 text-white' : ''}">
-                    <div class="text-xs ${isWeekend && !isToday ? 'text-red-500' : isToday ? '' : 'text-gray-500 dark:text-gray-400'}">${(viewMode === 'month' && isMobile) ? d.getDate() : d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
-                    <div class="font-bold text-sm ${viewMode === 'month' && isMobile ? 'hidden' : ''}">${d.getDate()}</div>
+                    <div class="text-xs ${isWeekend && !isToday ? 'text-red-500' : isToday ? '' : 'text-gray-500 dark:text-gray-400'}">${d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
+                    <div class="font-bold text-sm">${d.getDate()}</div>
                 </div>`;
             });
             headerHtml += `</div></div>`;
@@ -309,7 +300,6 @@
                 
                 const isCollapsed = collapsedCategories.includes(cat.name);
 
-                // --- 수정: 카테고리 헤더를 2열 그리드로 변경 ---
                 const categoryRow = document.createElement('div');
                 categoryRow.className = 'grid';
                 categoryRow.style.gridTemplateColumns = '200px 1fr';
@@ -329,7 +319,6 @@
                 categoryRow.appendChild(categoryTimelineCell);
                 timelineGrid.appendChild(categoryRow);
 
-                // --- 기능 추가: 카테고리 요약 바 계산 및 렌더링 ---
                 if (categoryTasks.length > 0) {
                     let minCategoryDate = new Date(categoryTasks[0].startDate);
                     let maxCategoryDate = null;
@@ -468,14 +457,7 @@
         const renderAll = () => {
             if (!state.isAuthReady) return;
             renderTimeline();
-            updateViewToggle();
         };
-
-        const updateViewToggle = () => {
-             document.getElementById('view-week-btn').classList.toggle('active', state.viewMode === 'week');
-             document.getElementById('view-month-btn').classList.toggle('active', state.viewMode === 'month');
-             DOM.timelineContainer.classList.toggle('overflow-x-auto', state.viewMode === 'month');
-        }
 
         const openModal = (modal) => modal.classList.remove('hidden');
         const closeModal = (modal) => modal.classList.add('hidden');
@@ -740,24 +722,19 @@
                 }
             });
             
+            // --- 수정: 네비게이션 버튼 로직 변경 (7일씩 이동) ---
             document.getElementById('prev-btn').addEventListener('click', () => {
-                if(state.viewMode === 'week') state.viewDate.setDate(state.viewDate.getDate() - 7);
-                else state.viewDate.setMonth(state.viewDate.getMonth() - 1);
+                state.viewDate.setDate(state.viewDate.getDate() - 7);
                 renderAll();
             });
             document.getElementById('next-btn').addEventListener('click', () => {
-                if(state.viewMode === 'week') state.viewDate.setDate(state.viewDate.getDate() + 7);
-                else state.viewDate.setMonth(state.viewDate.getMonth() + 1);
+                state.viewDate.setDate(state.viewDate.getDate() + 7);
                 renderAll();
             });
             document.getElementById('today-btn').addEventListener('click', () => {
                 state.viewDate = new Date();
                 renderAll();
             });
-            
-            document.getElementById('view-week-btn').addEventListener('click', () => { state.viewMode = 'week'; renderAll(); });
-            document.getElementById('view-month-btn').addEventListener('click', () => { state.viewMode = 'month'; renderAll(); });
-
 
             document.getElementById('manage-category-btn').addEventListener('click', () => openModal(DOM.categoryModal));
             document.getElementById('add-task-btn').addEventListener('click', () => openTaskModal());

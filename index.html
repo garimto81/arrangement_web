@@ -322,7 +322,6 @@
                 if (categoryTasks.length > 0) {
                     let minCategoryDate = new Date(categoryTasks[0].startDate);
                     let maxCategoryDate = null;
-                    let totalDuration = 0;
 
                     categoryTasks.forEach(task => {
                         const taskStart = new Date(task.startDate);
@@ -333,10 +332,9 @@
                             : new Date(todayStr);
 
                         if (!maxCategoryDate || taskEnd > maxCategoryDate) maxCategoryDate = taskEnd;
-                        
-                        const duration = Math.max(1, Math.round((taskEnd - taskStart) / (1000 * 60 * 60 * 24)) + 1);
-                        totalDuration += duration;
                     });
+                    
+                    const totalDuration = Math.max(1, Math.round((maxCategoryDate - minCategoryDate) / (1000 * 60 * 60 * 24)) + 1);
                     
                     const startMs = startDate.getTime();
                     const endMs = endDate.getTime();

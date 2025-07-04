@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 v1.02</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.03</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -79,7 +79,7 @@
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                 <i class="fa-solid fa-calendar-week text-indigo-500"></i>
-                <span>GGP CAMERA 업무 현황 v1.02</span>
+                <span>GGP CAMERA 업무 현황 v1.03</span>
             </h1>
             <div class="flex items-center gap-2">
                 <button id="manage-category-btn" class="flex items-center gap-2 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
@@ -257,7 +257,6 @@
             const { tasks, viewDate, collapsedCategories } = state;
             const sortedCategories = getSortedCategories();
             
-            // --- 수정: 오늘 기준 앞뒤 15일로 날짜 범위 계산 ---
             const centerDate = new Date(viewDate);
             const startDate = new Date(centerDate);
             startDate.setDate(centerDate.getDate() - 15);
@@ -319,38 +318,70 @@
                 categoryRow.appendChild(categoryTimelineCell);
                 timelineGrid.appendChild(categoryRow);
 
+                // --- 카테고리 기간 계산 로직 수정 ---
                 if (categoryTasks.length > 0) {
-                    let minCategoryDate = new Date(categoryTasks[0].startDate);
-                    let maxCategoryDate = null;
-
+                    const activeDays = new Set();
                     categoryTasks.forEach(task => {
                         const taskStart = new Date(task.startDate);
-                        if (taskStart < minCategoryDate) minCategoryDate = taskStart;
-                        
                         const taskEnd = task.status === 'completed' && task.endDate 
                             ? new Date(task.endDate) 
                             : new Date(todayStr);
-
-                        if (!maxCategoryDate || taskEnd > maxCategoryDate) maxCategoryDate = taskEnd;
+                        
+                        for (let d = new Date(taskStart); d <= taskEnd; d.setDate(d.getDate() + 1)) {
+                            activeDays.add(formatDate(d));
+                        }
                     });
-                    
-                    const totalDuration = Math.max(1, Math.round((maxCategoryDate - minCategoryDate) / (1000 * 60 * 60 * 24)) + 1);
-                    
-                    const startMs = startDate.getTime();
-                    const endMs = endDate.getTime();
-                    
-                    if (maxCategoryDate.getTime() >= startMs && minCategoryDate.getTime() <= endMs) {
-                        const leftOffset = (Math.max(minCategoryDate.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
-                        const rightOffset = (Math.min(maxCategoryDate.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
-                        const left = (leftOffset / daysInRange) * 100;
-                        const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
 
-                        const categoryBar = document.createElement('div');
-                        categoryBar.className = 'absolute h-4 top-1/2 -translate-y-1/2 bg-gray-400 dark:bg-gray-500 rounded flex items-center justify-center text-white text-xs font-semibold';
-                        categoryBar.style.left = `${left}%`;
-                        categoryBar.style.width = `${width}%`;
-                        categoryBar.innerHTML = `${totalDuration}일`;
-                        categoryTimelineCell.appendChild(categoryBar);
+                    const totalDuration = activeDays.size;
+                    const sortedDates = Array.from(activeDays).sort();
+
+                    if (sortedDates.length > 0) {
+                        const dateBlocks = [];
+                        let currentBlock = { start: sortedDates[0], end: sortedDates[0] };
+
+                        for (let i = 1; i < sortedDates.length; i++) {
+                            const prevDate = new Date(currentBlock.end);
+                            prevDate.setDate(prevDate.getDate() + 1);
+                            const currentDate = new Date(sortedDates[i]);
+
+                            if (prevDate.getTime() === currentDate.getTime()) {
+                                currentBlock.end = sortedDates[i];
+                            } else {
+                                dateBlocks.push(currentBlock);
+                                currentBlock = { start: sortedDates[i], end: sortedDates[i] };
+                            }
+                        }
+                        dateBlocks.push(currentBlock);
+
+                        const startMs = startDate.getTime();
+                        const endMs = endDate.getTime();
+                        let isFirstBlock = true;
+
+                        dateBlocks.forEach((block) => {
+                            const blockStartDt = new Date(block.start);
+                            const blockEndDt = new Date(block.end);
+
+                            if (blockEndDt.getTime() >= startMs && blockStartDt.getTime() <= endMs) {
+                                const leftOffset = (Math.max(blockStartDt.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
+                                const rightOffset = (Math.min(blockEndDt.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
+                                const left = (leftOffset / daysInRange) * 100;
+                                const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
+
+                                if (width > 0) {
+                                    const categoryBar = document.createElement('div');
+                                    categoryBar.className = 'absolute h-4 top-1/2 -translate-y-1/2 bg-gray-400 dark:bg-gray-500 rounded flex items-center justify-center text-white text-xs font-semibold';
+                                    categoryBar.style.left = `${left}%`;
+                                    categoryBar.style.width = `${width}%`;
+                                    
+                                    if (isFirstBlock) {
+                                        categoryBar.innerHTML = `${totalDuration}일`;
+                                        isFirstBlock = false;
+                                    }
+                                    
+                                    categoryTimelineCell.appendChild(categoryBar);
+                                }
+                            }
+                        });
                     }
                 }
 
@@ -720,7 +751,6 @@
                 }
             });
             
-            // --- 수정: 네비게이션 버튼 로직 변경 (7일씩 이동) ---
             document.getElementById('prev-btn').addEventListener('click', () => {
                 state.viewDate.setDate(state.viewDate.getDate() - 7);
                 renderAll();
@@ -769,7 +799,7 @@
         const setupDataListeners = () => {
             let categoriesLoaded = false, tasksLoaded = false, oldTasksLoaded = false;
             let newTasks = [], oldTasks = [];
-            let initialCategoriesLoaded = false; // <<< 추가: 초기 로드 여부 플래그
+            let initialCategoriesLoaded = false;
 
             const combineAndRender = () => {
                 if (categoriesLoaded && tasksLoaded && oldTasksLoaded) {
@@ -781,7 +811,6 @@
             onSnapshot(query(collection(db, "categories"), orderBy("priority")), snapshot => {
                 state.categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
-                // <<< 수정: 처음 카테고리를 불러올 때 모든 카테고리를 닫힘 상태로 설정
                 if (!initialCategoriesLoaded) {
                     state.collapsedCategories = state.categories.map(c => c.name);
                     initialCategoriesLoaded = true;

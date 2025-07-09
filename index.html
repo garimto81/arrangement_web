@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 v1.06</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.08</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -82,6 +82,27 @@
         .task-row:hover .drag-handle {
             opacity: 1;
         }
+        /* 담당자 아이콘 스타일 */
+        .assignee-icon-group {
+            display: flex;
+            flex-shrink: 0;
+        }
+        .assignee-icon {
+            width: 1.25rem; /* w-5 */
+            height: 1.25rem; /* h-5 */
+            border-radius: 9999px; /* rounded-full */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem; /* text-xs */
+            font-weight: bold;
+            color: white;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+        }
+        .assignee-icon:not(:first-child) {
+            margin-left: -0.5rem; /* -ml-2 */
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -91,7 +112,7 @@
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                 <i class="fa-solid fa-calendar-week text-indigo-500"></i>
-                <span>GGP CAMERA 업무 현황 v1.06</span>
+                <span>GGP CAMERA 업무 현황 v1.08</span>
             </h1>
             <div class="flex items-center gap-2">
                 <button id="manage-category-btn" class="flex items-center gap-2 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
@@ -142,10 +163,12 @@
                     <input type="url" id="task-url" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" placeholder="https://...">
                 </div>
                 <div class="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label for="task-name" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">담당자</label>
-                        <select id="task-name" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" required></select>
-                      </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">담당자</label>
+                        <div id="task-assignees-container" class="grid grid-cols-2 gap-x-4 gap-y-2 p-2 border rounded-md bg-gray-50 dark:bg-gray-700">
+                            <!-- Checkboxes will be dynamically inserted here -->
+                        </div>
+                    </div>
                       <div>
                         <label for="task-start-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">시작일</label>
                         <input type="date" id="task-start-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" required>
@@ -307,7 +330,6 @@
             sortedCategories.forEach(cat => {
                 const allCategoryTasks = tasks.filter(t => t.category === cat.name);
                 
-                // 데이터 정렬 로직 수정
                 const prioritizedTasks = allCategoryTasks.filter(t => t.priority != null).sort((a, b) => a.priority - b.priority);
                 const unprioritizedTasks = allCategoryTasks.filter(t => t.priority == null).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
                 const categoryTasks = [...prioritizedTasks, ...unprioritizedTasks];
@@ -450,17 +472,20 @@
                             const left = (leftOffset / daysInRange) * 100;
                             const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
 
-                            const assignee = ASSIGNEES[task.name] || { i:'?', c: 'bg-gray-500' };
-                            const barColor = assignee.c;
-                            
                             const taskBar = document.createElement('a');
                             taskBar.href = task.url || '#';
                             taskBar.target = '_blank';
                             if(!task.url) taskBar.onclick = () => false;
-                            taskBar.className = `absolute timeline-task-bar ${barColor}`;
+                            taskBar.className = `absolute timeline-task-bar bg-gray-500`;
                             taskBar.style.left = `${left}%`;
                             taskBar.style.width = `${width}%`;
-                            taskBar.innerHTML = `<span class="font-bold text-xs">${assignee.i}</span><span class="task-title-in-bar">${task.title}</span>`;
+                            
+                            const assigneeIcons = (task.assignees || []).map(assigneeName => {
+                                const assignee = ASSIGNEES[assigneeName] || {i: '?', c: 'bg-gray-400'};
+                                return `<span class="assignee-icon ${assignee.c}">${assignee.i}</span>`;
+                            }).join('');
+                            
+                            taskBar.innerHTML = `<div class="assignee-icon-group">${assigneeIcons}</div><span class="task-title-in-bar">${task.title}</span>`;
                             timelineCell.appendChild(taskBar);
                         }
                         taskRow.appendChild(timelineCell);
@@ -518,10 +543,16 @@
         const openTaskModal = (task = null) => {
             DOM.taskForm.reset();
             const taskCategory = document.getElementById('task-category');
-            const taskName = document.getElementById('task-name');
+            const assigneesContainer = document.getElementById('task-assignees-container');
             const sortedCategories = getSortedCategories();
             taskCategory.innerHTML = sortedCategories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-            taskName.innerHTML = Object.keys(ASSIGNEES).map(name => `<option value="${name}">${name}</option>`).join('');
+            
+            assigneesContainer.innerHTML = Object.keys(ASSIGNEES).map(name => `
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="task-assignees" value="${name}" class="text-indigo-600 rounded">
+                    <span>${name}</span>
+                </label>
+            `).join('');
             
             if (task) {
                 document.getElementById('task-modal-title').textContent = '업무 수정';
@@ -530,7 +561,13 @@
                 taskCategory.value = task.category;
                 document.getElementById('task-title').value = task.title;
                 document.getElementById('task-url').value = task.url || '';
-                taskName.value = task.name;
+                
+                const assignees = task.assignees || (task.name ? [task.name] : []);
+                assignees.forEach(assigneeName => {
+                    const checkbox = assigneesContainer.querySelector(`input[value="${assigneeName}"]`);
+                    if (checkbox) checkbox.checked = true;
+                });
+
                 document.getElementById('task-start-date').value = task.startDate;
                 document.querySelector(`input[name="task-status"][value="${task.status ?? 'inProgress'}"]`).checked = true;
                 
@@ -565,12 +602,14 @@
             const source = document.getElementById('task-source').value;
             const status = document.querySelector('input[name="task-status"]:checked').value;
             const category = document.getElementById('task-category').value;
+            
+            const selectedAssignees = Array.from(document.querySelectorAll('input[name="task-assignees"]:checked')).map(cb => cb.value);
 
             const data = {
                 category: category,
                 title: document.getElementById('task-title').value.trim(),
                 url: document.getElementById('task-url').value.trim(),
-                name: document.getElementById('task-name').value,
+                assignees: selectedAssignees,
                 startDate: document.getElementById('task-start-date').value,
                 status: status,
                 endDate: status === 'completed'
@@ -582,13 +621,11 @@
             
             try {
                 if (id) {
-                    // 'old' 소스 데이터 수정 시 마이그레이션
                     if (source === 'old') {
                         const batch = writeBatch(db);
                         const taskData = state.tasks.find(t => t.id === id);
-                        const { id: taskId, source: taskSource, ...dataToSave } = taskData;
+                        const { id: taskId, source: taskSource, name, ...dataToSave } = taskData;
                         
-                        // 버그 수정: priority 값 추가
                         const tasksInCategory = state.tasks.filter(t => t.category === category && t.source !== 'old');
                         data.priority = tasksInCategory.length;
                         
@@ -600,10 +637,10 @@
                         
                         await batch.commit();
                     } else {
-                        await updateDoc(doc(db, "tasks", id), data);
+                        const { name, ...updateData } = data; // name 필드 제거
+                        await updateDoc(doc(db, "tasks", id), updateData);
                     }
                 } else {
-                    // 새 업무 추가 시 priority 설정
                     const tasksInCategory = state.tasks.filter(t => t.category === category && t.source !== 'old');
                     data.priority = tasksInCategory.length;
                     data.createdAt = serverTimestamp();
@@ -791,9 +828,9 @@
                         const taskData = state.tasks.find(t => t.id === taskId);
                         if (!taskData) return;
 
-                        const { id, source, ...dataToSave } = taskData;
+                        const { id, source, name, ...dataToSave } = taskData;
                         const newTaskRef = doc(db, 'tasks', taskId);
-                        batch.set(newTaskRef, { ...dataToSave, priority: index });
+                        batch.set(newTaskRef, { ...dataToSave, priority: index, assignees: taskData.assignees || [] });
 
                         const oldTaskRef = doc(db, `artifacts/${appId}/public/data/work-pages`, taskId);
                         batch.delete(oldTaskRef);
@@ -894,6 +931,14 @@
             
             document.getElementById('info-modal-close-btn').addEventListener('click', () => closeModal(DOM.infoModal));
 
+            // 모달 외부 클릭 시 닫기
+            document.querySelectorAll('[role="dialog"]').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        closeModal(modal);
+                    }
+                });
+            });
 
             DOM.taskForm.querySelectorAll('input[name="task-status"]').forEach(radio => {
                 radio.addEventListener('change', e => {
@@ -939,7 +984,6 @@
                 combineAndRender();
             });
             
-            // 데이터 누락 방지를 위해 orderBy 제거
             onSnapshot(query(collection(db, "tasks")), snapshot => {
                 newTasks = snapshot.docs.map(doc => {
                     const data = doc.data();
@@ -958,11 +1002,11 @@
                         category: data.category || '기본', 
                         title: data.title,
                         url: data.url,
-                        name: data.name,
+                        assignees: data.name ? [data.name] : [], // name을 assignees 배열로 변환
                         startDate: data.date,
                         status: data.status || 'completed',
                         endDate: data.endDate || data.date,
-                        priority: null // 과거 데이터는 priority가 없음
+                        priority: null 
                     };
                 });
                 oldTasksLoaded = true;

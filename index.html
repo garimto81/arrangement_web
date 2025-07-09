@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 v1.08</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.11</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -112,7 +112,7 @@
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                 <i class="fa-solid fa-calendar-week text-indigo-500"></i>
-                <span>GGP CAMERA 업무 현황 v1.08</span>
+                <span>GGP CAMERA 업무 현황 v1.11</span>
             </h1>
             <div class="flex items-center gap-2">
                 <button id="manage-category-btn" class="flex items-center gap-2 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
@@ -165,7 +165,7 @@
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">담당자</label>
-                        <div id="task-assignees-container" class="grid grid-cols-2 gap-x-4 gap-y-2 p-2 border rounded-md bg-gray-50 dark:bg-gray-700">
+                        <div id="task-assignees-container" class="flex flex-wrap gap-x-4 gap-y-2 p-2 border rounded-md bg-gray-50 dark:bg-gray-700">
                             <!-- Checkboxes will be dynamically inserted here -->
                         </div>
                     </div>
@@ -232,8 +232,10 @@
         import { getFirestore, collection, query, onSnapshot, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, orderBy, getDocs, writeBatch, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const ASSIGNEES = { 
-            "Aiden Kim": {i:"A", c:"bg-blue-500"}, "Matthew Kim": {i:"M", c:"bg-green-500"}, 
-            "Kai Kim": {i:"K", c:"bg-yellow-500"}, "Trey Song": {i:"T", c:"bg-purple-500"} 
+            "Aiden Kim":   {i:"A", c:"bg-blue-500",   hex: "#3b82f6"}, 
+            "Matthew Kim": {i:"M", c:"bg-green-500",  hex: "#22c55e"}, 
+            "Kai Kim":     {i:"K", c:"bg-yellow-500", hex: "#eab308"}, 
+            "Trey Song":   {i:"T", c:"bg-purple-500", hex: "#a855f7"} 
         };
         const DOM = {
             timelineContainer: document.getElementById('timeline-container'),
@@ -286,6 +288,35 @@
         
         const getSortedCategories = () => {
             return [...state.categories].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+        };
+
+        const getTaskBarBackground = (assignees) => {
+            if (!assignees || assignees.length === 0) {
+                return { class: 'bg-gray-500', style: '' };
+            }
+
+            const validAssignees = assignees
+                .map(name => ASSIGNEES[name])
+                .filter(Boolean);
+
+            if (validAssignees.length === 0) {
+                return { class: 'bg-gray-500', style: '' };
+            }
+
+            if (validAssignees.length === 1) {
+                return { class: validAssignees[0].c, style: '' };
+            }
+            
+            const colors = validAssignees.map(a => a.hex);
+
+            if (validAssignees.length === 2) {
+                return { class: '', style: `background-image: linear-gradient(to right, ${colors[0]}, ${colors[1]});` };
+            }
+            if (validAssignees.length === 3) {
+                return { class: '', style: `background-image: linear-gradient(to right, ${colors[0]}, ${colors[1]}, ${colors[2]});` };
+            }
+            
+            return { class: '', style: `background-image: linear-gradient(to right, ${colors[0]}, ${colors[1]});` };
         };
 
         const renderTimeline = () => {
@@ -419,7 +450,6 @@
                     }
                 }
 
-                // 각 카테고리별 업무 목록을 담을 컨테이너 추가
                 const tasksContainer = document.createElement('div');
                 tasksContainer.dataset.category = cat.name;
                 timelineGrid.appendChild(tasksContainer);
@@ -431,7 +461,7 @@
                         taskRow.style.gridTemplateColumns = '200px 1fr';
                         taskRow.dataset.taskId = task.id;
                         taskRow.dataset.taskSource = task.source;
-                        taskRow.draggable = true; // 드래그 가능하게 설정
+                        taskRow.draggable = true;
 
                         taskRow.innerHTML = `<div class="task-row-title sticky left-0 z-10 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 flex items-center text-sm gap-2">
                                                 <i class="fa-solid fa-grip-vertical text-gray-400 drag-handle"></i>
@@ -476,9 +506,10 @@
                             taskBar.href = task.url || '#';
                             taskBar.target = '_blank';
                             if(!task.url) taskBar.onclick = () => false;
-                            taskBar.className = `absolute timeline-task-bar bg-gray-500`;
-                            taskBar.style.left = `${left}%`;
-                            taskBar.style.width = `${width}%`;
+                            
+                            const background = getTaskBarBackground(task.assignees);
+                            taskBar.className = `absolute timeline-task-bar ${background.class}`;
+                            taskBar.setAttribute('style', `left: ${left}%; width: ${width}%; ${background.style}`);
                             
                             const assigneeIcons = (task.assignees || []).map(assigneeName => {
                                 const assignee = ASSIGNEES[assigneeName] || {i: '?', c: 'bg-gray-400'};

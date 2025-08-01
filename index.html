@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 v1.14</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.15</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -112,7 +112,7 @@
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                 <i class="fa-solid fa-calendar-week text-indigo-500"></i>
-                <span>GGP CAMERA 업무 현황 v1.14</span>
+                <span>GGP CAMERA 업무 현황 v1.15</span>
             </h1>
             <div class="flex items-center gap-2">
                 <button id="manage-category-btn" class="flex items-center gap-2 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
@@ -141,6 +141,12 @@
             </div>
         </div>
 
+    </div>
+
+    <!-- Tooltip -->
+    <div id="task-tooltip" class="fixed hidden z-50 p-2 text-sm text-white bg-gray-900/80 dark:bg-black/80 rounded-md shadow-lg pointer-events-none max-w-xs">
+        <div id="tooltip-title" class="font-bold"></div>
+        <div id="tooltip-assignees" class="text-xs text-gray-300 mt-1"></div>
     </div>
 
     <!-- Modals -->
@@ -246,6 +252,7 @@
             taskForm: document.getElementById('task-form'),
             categoryList: document.getElementById('category-list'),
             darkModeToggle: document.getElementById('dark-mode-toggle'),
+            tooltip: document.getElementById('task-tooltip'),
         };
         
         let db, auth, userId, appId;
@@ -509,6 +516,7 @@
                             taskBar.href = task.url || '#';
                             taskBar.target = '_blank';
                             if(!task.url) taskBar.onclick = () => false;
+                            taskBar.dataset.taskId = task.id; // 툴팁을 위해 ID 추가
                             
                             const background = getTaskBarBackground(task.assignees);
                             taskBar.className = `absolute timeline-task-bar ${background.class}`;
@@ -990,6 +998,33 @@
                 html.classList.toggle('dark');
                 localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
                 DOM.darkModeToggle.querySelector('i').className = html.classList.contains('dark') ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+            });
+            
+            // 툴팁 이벤트 리스너
+            DOM.timelineContainer.addEventListener('mouseover', e => {
+                const taskBar = e.target.closest('.timeline-task-bar');
+                if (!taskBar) return;
+                
+                const taskId = taskBar.dataset.taskId;
+                const task = state.tasks.find(t => t.id === taskId);
+                if (!task) return;
+
+                DOM.tooltip.classList.remove('hidden');
+                document.getElementById('tooltip-title').textContent = task.title;
+                document.getElementById('tooltip-assignees').textContent = (task.assignees || []).join(', ');
+            });
+
+            DOM.timelineContainer.addEventListener('mouseout', e => {
+                const taskBar = e.target.closest('.timeline-task-bar');
+                if (!taskBar) return;
+                DOM.tooltip.classList.add('hidden');
+            });
+            
+            DOM.timelineContainer.addEventListener('mousemove', e => {
+                if (!DOM.tooltip.classList.contains('hidden')) {
+                    DOM.tooltip.style.left = `${e.pageX + 15}px`;
+                    DOM.tooltip.style.top = `${e.pageY + 15}px`;
+                }
             });
         };
 

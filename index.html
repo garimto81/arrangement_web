@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 v1.11</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.13</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -112,7 +112,7 @@
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                 <i class="fa-solid fa-calendar-week text-indigo-500"></i>
-                <span>GGP CAMERA 업무 현황 v1.11</span>
+                <span>GGP CAMERA 업무 현황 v1.13</span>
             </h1>
             <div class="flex items-center gap-2">
                 <button id="manage-category-btn" class="flex items-center gap-2 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
@@ -249,7 +249,7 @@
         };
         
         let db, auth, userId, appId;
-        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), collapsedCategories: [] };
+        let state = { categories: [], tasks: [], isAuthReady: false, itemToDelete: null, viewDate: new Date(), collapsedCategories: [], individuallyShownTasks: new Set() };
         
         try {
             const firebaseConfig = {
@@ -320,7 +320,7 @@
         };
 
         const renderTimeline = () => {
-            const { tasks, viewDate, collapsedCategories } = state;
+            const { tasks, viewDate, collapsedCategories, individuallyShownTasks } = state;
             const sortedCategories = getSortedCategories();
             
             const centerDate = new Date(viewDate);
@@ -456,8 +456,11 @@
 
                 if (categoryTasks.length > 0) {
                     categoryTasks.forEach(task => {
+                        const isIndividuallyShown = individuallyShownTasks.has(task.id);
+                        const isVisible = !isCollapsed || isIndividuallyShown;
+
                         const taskRow = document.createElement('div');
-                        taskRow.className = `task-row grid ${isCollapsed ? 'hidden' : ''}`;
+                        taskRow.className = `task-row grid ${!isVisible ? 'hidden' : ''}`;
                         taskRow.style.gridTemplateColumns = '200px 1fr';
                         taskRow.dataset.taskId = task.id;
                         taskRow.dataset.taskSource = task.source;
@@ -993,24 +996,29 @@
         const setupDataListeners = () => {
             let categoriesLoaded = false, tasksLoaded = false, oldTasksLoaded = false;
             let newTasks = [], oldTasks = [];
-            let initialCategoriesLoaded = false;
+            let initialCollapseStateSet = false;
 
             const combineAndRender = () => {
                 if (categoriesLoaded && tasksLoaded && oldTasksLoaded) {
                      state.tasks = [...newTasks, ...oldTasks];
+                     
+                     if (!initialCollapseStateSet) {
+                        initialCollapseStateSet = true;
+
+                        const tasksWithTimestamp = newTasks.filter(t => t.createdAt && t.createdAt.toMillis);
+                        const recentTasks = [...tasksWithTimestamp]
+                            .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+                            .slice(0, 5);
+                        
+                        state.individuallyShownTasks = new Set(recentTasks.map(t => t.id));
+                        state.collapsedCategories = state.categories.map(c => c.name);
+                     }
                      renderAll();
                 }
             };
 
             onSnapshot(query(collection(db, "categories"), orderBy("priority")), snapshot => {
                 state.categories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                if (!initialCategoriesLoaded) {
-                    state.collapsedCategories = state.categories.map(c => c.name);
-                    initialCategoriesLoaded = true;
-                }
-
-                renderCategoryList();
                 categoriesLoaded = true;
                 combineAndRender();
             });

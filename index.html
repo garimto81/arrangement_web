@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 v1.13</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.19</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -40,22 +40,12 @@
             top: 0.25rem;
             overflow: hidden;
             border-radius: 0.375rem;
-            padding: 0.25rem 0.5rem;
+            padding: 0;
             transition: background-color 0.2s;
-            color: white;
-            font-size: 0.8rem;
             z-index: 10;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
             cursor: pointer;
-        }
-        .timeline-task-bar .task-title-in-bar {
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-            font-weight: 500;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
         .priority-btn.hidden, .category-action-btn.hidden {
             visibility: hidden;
@@ -66,13 +56,12 @@
         .category-toggle-btn.collapsed {
             transform: rotate(-90deg);
         }
-        /* 드래그 앤 드롭 스타일 */
         .task-row.dragging {
             opacity: 0.5;
-            background: #eef2ff; /* indigo-100 */
+            background: #eef2ff;
         }
         .dark .task-row.dragging {
-            background: #312e81; /* indigo-900 */
+            background: #312e81;
         }
         .drag-handle {
             opacity: 0;
@@ -82,37 +71,16 @@
         .task-row:hover .drag-handle {
             opacity: 1;
         }
-        /* 담당자 아이콘 스타일 */
-        .assignee-icon-group {
-            display: flex;
-            flex-shrink: 0;
-        }
-        .assignee-icon {
-            width: 1.25rem; /* w-5 */
-            height: 1.25rem; /* h-5 */
-            border-radius: 9999px; /* rounded-full */
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem; /* text-xs */
-            font-weight: bold;
-            color: white;
-            border: 2px solid white;
-            box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
-        }
-        .assignee-icon:not(:first-child) {
-            margin-left: -0.5rem; /* -ml-2 */
-        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
 
-    <div class="container mx-auto p-4 sm:p-6 md:p-8">
+    <div class="max-w-[1920px] mx-auto p-4 sm:p-6 md:p-8">
         
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                 <i class="fa-solid fa-calendar-week text-indigo-500"></i>
-                <span>GGP CAMERA 업무 현황 v1.13</span>
+                <span>GGP CAMERA 업무 현황 v1.19</span>
             </h1>
             <div class="flex items-center gap-2">
                 <button id="manage-category-btn" class="flex items-center gap-2 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
@@ -143,11 +111,17 @@
 
     </div>
 
+    <!-- Tooltip -->
+    <div id="task-tooltip" class="fixed hidden z-50 p-2 text-sm text-white bg-gray-900/80 dark:bg-black/80 rounded-md shadow-lg pointer-events-none max-w-xs">
+        <div id="tooltip-title" class="font-bold"></div>
+        <div id="tooltip-assignees" class="text-xs text-gray-300 mt-1"></div>
+    </div>
+
     <!-- Modals -->
     <div id="task-modal" role="dialog" class="fixed inset-0 bg-black/60 flex items-center justify-center hidden z-40 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6">
-            <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6"></h3>
-            <form id="task-form">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[90vh] flex flex-col">
+            <h3 id="task-modal-title" class="text-xl font-bold text-gray-700 dark:text-gray-200 mb-6 flex-shrink-0"></h3>
+            <form id="task-form" class="flex-grow overflow-y-auto pr-4">
                 <input type="hidden" id="task-id">
                 <input type="hidden" id="task-source">
                 <div class="mb-4">
@@ -162,34 +136,28 @@
                     <label for="task-url" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">URL</label>
                     <input type="url" id="task-url" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" placeholder="https://...">
                 </div>
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">담당자</label>
-                        <div id="task-assignees-container" class="flex flex-wrap gap-x-4 gap-y-2 p-2 border rounded-md bg-gray-50 dark:bg-gray-700">
-                            <!-- Checkboxes will be dynamically inserted here -->
-                        </div>
-                    </div>
-                      <div>
-                        <label for="task-start-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">시작일</label>
-                        <input type="date" id="task-start-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" required>
-                      </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">상태</label>
-                    <div class="flex items-center gap-8">
-                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="task-status" value="inProgress" class="text-indigo-600" checked>진행 중</label>
-                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="task-status" value="completed" class="text-indigo-600">완료</label>
+                 <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">담당자</label>
+                    <div id="task-assignees-container" class="flex flex-wrap gap-x-4 gap-y-2 p-2 border rounded-md bg-gray-50 dark:bg-gray-700">
+                        <!-- Checkboxes will be dynamically inserted here -->
                     </div>
                 </div>
-                <div id="end-date-wrapper" class="mt-4 mb-6 hidden">
-                      <label for="task-end-date" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">완료일</label>
-                      <input type="date" id="task-end-date" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700">
+
+                <hr class="my-6 border-gray-200 dark:border-gray-600">
+
+                <div id="schedules-container" class="space-y-4">
+                    <!-- Schedule blocks will be dynamically inserted here -->
                 </div>
-                <div class="flex justify-end gap-3 mt-8">
-                    <button type="button" class="close-modal-btn px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">취소</button>
-                    <button type="submit" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md">저장</button>
-                </div>
+                
+                <button type="button" id="add-schedule-btn" class="mt-4 w-full flex items-center justify-center gap-2 py-2 px-4 border-2 border-dashed rounded-lg text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>업무 구간 추가</span>
+                </button>
             </form>
+            <div class="flex justify-end gap-3 mt-8 flex-shrink-0">
+                <button type="button" class="close-modal-btn px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600">취소</button>
+                <button type="submit" form="task-form" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-md">저장</button>
+            </div>
         </div>
     </div>
     
@@ -246,6 +214,7 @@
             taskForm: document.getElementById('task-form'),
             categoryList: document.getElementById('category-list'),
             darkModeToggle: document.getElementById('dark-mode-toggle'),
+            tooltip: document.getElementById('task-tooltip'),
         };
         
         let db, auth, userId, appId;
@@ -344,7 +313,7 @@
             const timelineGrid = document.createElement('div');
             timelineGrid.className = 'animate-fade-in';
             
-            let headerHtml = `<div class="sticky top-0 z-20 bg-gray-200 dark:bg-gray-700 grid" style="grid-template-columns: 200px 1fr;">`;
+            let headerHtml = `<div class="sticky top-0 z-20 bg-gray-200 dark:bg-gray-700 grid" style="grid-template-columns: 320px 1fr;">`;
             headerHtml += `<div class="font-semibold text-sm p-2 border-r border-b border-gray-300 dark:border-gray-600">업무</div>`;
             headerHtml += `<div class="grid" style="grid-template-columns: repeat(${daysInRange}, minmax(0, 1fr));">`;
             dateArray.forEach(d => {
@@ -362,7 +331,11 @@
                 const allCategoryTasks = tasks.filter(t => t.category === cat.name);
                 
                 const prioritizedTasks = allCategoryTasks.filter(t => t.priority != null).sort((a, b) => a.priority - b.priority);
-                const unprioritizedTasks = allCategoryTasks.filter(t => t.priority == null).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+                const unprioritizedTasks = allCategoryTasks.filter(t => t.priority == null).sort((a, b) => {
+                    const dateA = new Date(a.schedules?.[0]?.startDate || 0);
+                    const dateB = new Date(b.schedules?.[0]?.startDate || 0);
+                    return dateA - dateB;
+                });
                 const categoryTasks = [...prioritizedTasks, ...unprioritizedTasks];
 
                 if (cat.name === '기본' && categoryTasks.length === 0) return;
@@ -371,7 +344,7 @@
 
                 const categoryRow = document.createElement('div');
                 categoryRow.className = 'grid';
-                categoryRow.style.gridTemplateColumns = '200px 1fr';
+                categoryRow.style.gridTemplateColumns = '320px 1fr';
                 
                 const categoryTitleCell = document.createElement('div');
                 categoryTitleCell.className = 'sticky left-0 z-10 bg-gray-100 dark:bg-gray-700/80 p-2 text-sm border-b border-r border-gray-300 dark:border-gray-600 flex items-center gap-2';
@@ -391,14 +364,16 @@
                 if (categoryTasks.length > 0) {
                     const activeDays = new Set();
                     categoryTasks.forEach(task => {
-                        const taskStart = new Date(task.startDate);
-                        const taskEnd = task.status === 'completed' && task.endDate 
-                            ? new Date(task.endDate) 
-                            : new Date(todayStr);
-                        
-                        for (let d = new Date(taskStart); d <= taskEnd; d.setDate(d.getDate() + 1)) {
-                            activeDays.add(formatDate(d));
-                        }
+                        (task.schedules || []).forEach(schedule => {
+                            const taskStart = new Date(schedule.startDate);
+                            const taskEnd = schedule.status === 'completed' && schedule.endDate 
+                                ? new Date(schedule.endDate) 
+                                : new Date(todayStr);
+                            
+                            for (let d = new Date(taskStart); d <= taskEnd; d.setDate(d.getDate() + 1)) {
+                                activeDays.add(formatDate(d));
+                            }
+                        });
                     });
 
                     const sortedDates = Array.from(activeDays).sort();
@@ -461,7 +436,7 @@
 
                         const taskRow = document.createElement('div');
                         taskRow.className = `task-row grid ${!isVisible ? 'hidden' : ''}`;
-                        taskRow.style.gridTemplateColumns = '200px 1fr';
+                        taskRow.style.gridTemplateColumns = '320px 1fr';
                         taskRow.dataset.taskId = task.id;
                         taskRow.dataset.taskSource = task.source;
                         taskRow.draggable = true;
@@ -493,42 +468,45 @@
                             timelineCell.appendChild(bgCell);
                         }
 
-                        const taskStartDt = new Date(task.startDate);
-                        const taskEndDt = task.status === 'completed' && task.endDate ? new Date(task.endDate) : new Date(todayStr);
-                        
-                        const startMs = startDate.getTime();
-                        const endMs = endDate.getTime();
+                        (task.schedules || []).forEach(schedule => {
+                            const taskStartDt = new Date(schedule.startDate);
+                            const taskEndDt = schedule.status === 'completed' && schedule.endDate ? new Date(schedule.endDate) : new Date(todayStr);
+                            
+                            const startMs = startDate.getTime();
+                            const endMs = endDate.getTime();
 
-                        if (taskEndDt.getTime() >= startMs && taskStartDt.getTime() <= endMs) {
-                            const leftOffset = (Math.max(taskStartDt.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
-                            const rightOffset = (Math.min(taskEndDt.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
-                            const left = (leftOffset / daysInRange) * 100;
-                            const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
+                            if (taskEndDt.getTime() >= startMs && taskStartDt.getTime() <= endMs) {
+                                const leftOffset = (Math.max(taskStartDt.getTime(), startMs) - startMs) / (1000 * 60 * 60 * 24);
+                                const rightOffset = (Math.min(taskEndDt.getTime(), endMs) - startMs) / (1000 * 60 * 60 * 24);
+                                const left = (leftOffset / daysInRange) * 100;
+                                const width = ((rightOffset - leftOffset + 1) / daysInRange) * 100;
 
-                            const taskBar = document.createElement('a');
-                            taskBar.href = task.url || '#';
-                            taskBar.target = '_blank';
-                            if(!task.url) taskBar.onclick = () => false;
-                            
-                            const background = getTaskBarBackground(task.assignees);
-                            taskBar.className = `absolute timeline-task-bar ${background.class}`;
-                            taskBar.setAttribute('style', `left: ${left}%; width: ${width}%; ${background.style}`);
-                            
-                            const assigneeIcons = (task.assignees || []).map(assigneeName => {
-                                const assignee = ASSIGNEES[assigneeName] || {i: '?', c: 'bg-gray-400'};
-                                return `<span class="assignee-icon ${assignee.c}">${assignee.i}</span>`;
-                            }).join('');
-                            
-                            taskBar.innerHTML = `<div class="assignee-icon-group">${assigneeIcons}</div><span class="task-title-in-bar">${task.title}</span>`;
-                            timelineCell.appendChild(taskBar);
-                        }
+                                const taskBar = document.createElement('a');
+                                taskBar.href = task.url || '#';
+                                taskBar.target = '_blank';
+                                if(!task.url) taskBar.onclick = () => false;
+                                taskBar.dataset.taskId = task.id;
+                                
+                                taskBar.className = 'absolute timeline-task-bar bg-gray-200 dark:bg-gray-700 p-0.5';
+                                taskBar.setAttribute('style', `left: ${left}%; width: ${width}%;`);
+                                
+                                const progressFill = document.createElement('div');
+                                const background = getTaskBarBackground(task.assignees);
+                                progressFill.className = `h-full rounded-sm ${background.class}`;
+                                progressFill.setAttribute('style', `width: ${schedule.progress || 0}%; ${background.style}`);
+
+                                taskBar.appendChild(progressFill);
+                                timelineCell.appendChild(taskBar);
+                            }
+                        });
+
                         taskRow.appendChild(timelineCell);
                         tasksContainer.appendChild(taskRow);
                     });
                 } else if (!isCollapsed) {
                     const emptyRow = document.createElement('div');
                     emptyRow.className = 'grid';
-                    emptyRow.style.gridTemplateColumns = '200px 1fr';
+                    emptyRow.style.gridTemplateColumns = '320px 1fr';
                     emptyRow.innerHTML = `<div class="sticky left-0 bg-white dark:bg-gray-800 p-2 border-b border-r border-gray-200 dark:border-gray-600/50 text-gray-400 text-sm italic">(업무 없음)</div><div class="border-b border-gray-200 dark:border-gray-600/50"></div>`;
                     tasksContainer.appendChild(emptyRow);
                 }
@@ -574,11 +552,68 @@
             openModal(DOM.infoModal);
         };
 
+        const addScheduleBlock = (container, schedule = {}, index) => {
+            const block = document.createElement('div');
+            block.className = 'schedule-block border p-4 rounded-lg relative';
+            
+            const uniqueId = `schedule-${Date.now()}-${index}`;
+
+            block.innerHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="start-date-${uniqueId}" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">시작일</label>
+                        <input type="date" name="start-date" id="start-date-${uniqueId}" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" value="${schedule.startDate || formatDate(new Date())}" required>
+                    </div>
+                    <div class="end-date-wrapper ${schedule.status === 'completed' ? '' : 'hidden'}">
+                        <label for="end-date-${uniqueId}" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">완료일</label>
+                        <input type="date" name="end-date" id="end-date-${uniqueId}" class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-700" value="${schedule.endDate || ''}">
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">상태</label>
+                    <div class="flex items-center gap-8">
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="status-${uniqueId}" value="inProgress" class="text-indigo-600" ${schedule.status !== 'completed' ? 'checked' : ''}>진행 중</label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="status-${uniqueId}" value="completed" class="text-indigo-600" ${schedule.status === 'completed' ? 'checked' : ''}>완료</label>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label for="progress-${uniqueId}" class="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">진행률 <span class="progress-value">${schedule.progress || 0}%</span></label>
+                    <input type="range" name="progress" id="progress-${uniqueId}" min="0" max="100" value="${schedule.progress || 0}" step="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700">
+                </div>
+                ${index > 0 ? '<button type="button" class="delete-schedule-btn absolute top-2 right-2 w-6 h-6 text-gray-400 hover:text-red-500"><i class="fa-solid fa-times"></i></button>' : ''}
+            `;
+
+            container.appendChild(block);
+
+            // Event Listeners for the new block
+            const progressSlider = block.querySelector('[name="progress"]');
+            const progressValueDisplay = block.querySelector('.progress-value');
+            progressSlider.addEventListener('input', (e) => {
+                progressValueDisplay.textContent = `${e.target.value}%`;
+            });
+
+            const statusRadios = block.querySelectorAll(`[name="status-${uniqueId}"]`);
+            const endDateWrapper = block.querySelector('.end-date-wrapper');
+            statusRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    endDateWrapper.classList.toggle('hidden', e.target.value !== 'completed');
+                });
+            });
+
+            const deleteBtn = block.querySelector('.delete-schedule-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => {
+                    block.remove();
+                });
+            }
+        };
+
         const openTaskModal = (task = null) => {
             DOM.taskForm.reset();
             const taskCategory = document.getElementById('task-category');
             const assigneesContainer = document.getElementById('task-assignees-container');
             const sortedCategories = getSortedCategories();
+            
             taskCategory.innerHTML = sortedCategories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
             
             assigneesContainer.innerHTML = Object.keys(ASSIGNEES).map(name => `
@@ -602,23 +637,30 @@
                     if (checkbox) checkbox.checked = true;
                 });
 
-                document.getElementById('task-start-date').value = task.startDate;
-                document.querySelector(`input[name="task-status"][value="${task.status ?? 'inProgress'}"]`).checked = true;
-                
-                const isCompleted = (task.status === 'completed');
-                document.getElementById('end-date-wrapper').classList.toggle('hidden', !isCompleted);
-                
-                if (isCompleted) {
-                    document.getElementById('task-end-date').value = task.endDate;
+                // Schedule rendering logic
+                const schedulesContainer = document.getElementById('schedules-container');
+                schedulesContainer.innerHTML = ''; // Clear existing schedules
+                let schedules = task.schedules;
+                if (!schedules || schedules.length === 0) { // Migration for old data
+                    schedules = [{
+                        startDate: task.startDate,
+                        endDate: task.endDate,
+                        status: task.status || 'inProgress',
+                        progress: task.progress || 0
+                    }];
                 }
+
+                schedules.forEach((schedule, index) => {
+                    addScheduleBlock(schedulesContainer, schedule, index);
+                });
 
             } else {
                 document.getElementById('task-modal-title').textContent = '새 업무 추가';
                 document.getElementById('task-id').value = '';
                 document.getElementById('task-source').value = 'new';
-                document.getElementById('task-start-date').valueAsDate = new Date();
-                document.querySelector('input[name="task-status"][value="inProgress"]').checked = true;
-                document.getElementById('end-date-wrapper').classList.add('hidden');
+                const schedulesContainer = document.getElementById('schedules-container');
+                schedulesContainer.innerHTML = '';
+                addScheduleBlock(schedulesContainer, {}, 0); // Add one empty block
             }
             openModal(DOM.taskModal);
         };
@@ -634,21 +676,30 @@
             e.preventDefault();
             const id = document.getElementById('task-id').value;
             const source = document.getElementById('task-source').value;
-            const status = document.querySelector('input[name="task-status"]:checked').value;
             const category = document.getElementById('task-category').value;
             
             const selectedAssignees = Array.from(document.querySelectorAll('input[name="task-assignees"]:checked')).map(cb => cb.value);
+
+            const schedules = [];
+            document.querySelectorAll('.schedule-block').forEach(block => {
+                const schedule = {
+                    startDate: block.querySelector('[name="start-date"]').value,
+                    endDate: block.querySelector('[name="end-date"]').value || null,
+                    status: block.querySelector('[name^="status-"]:checked').value,
+                    progress: parseInt(block.querySelector('[name="progress"]').value, 10)
+                };
+                if (schedule.status === 'completed' && !schedule.endDate) {
+                    schedule.endDate = formatDate(new Date());
+                }
+                schedules.push(schedule);
+            });
 
             const data = {
                 category: category,
                 title: document.getElementById('task-title').value.trim(),
                 url: document.getElementById('task-url').value.trim(),
                 assignees: selectedAssignees,
-                startDate: document.getElementById('task-start-date').value,
-                status: status,
-                endDate: status === 'completed'
-                    ? (document.getElementById('task-end-date').value || formatDate(new Date()))
-                    : null,
+                schedules: schedules
             };
 
             closeModal(DOM.taskModal);
@@ -658,7 +709,7 @@
                     if (source === 'old') {
                         const batch = writeBatch(db);
                         const taskData = state.tasks.find(t => t.id === id);
-                        const { id: taskId, source: taskSource, name, ...dataToSave } = taskData;
+                        const { id: taskId, source: taskSource, name, startDate, endDate, status, progress, ...dataToSave } = taskData;
                         
                         const tasksInCategory = state.tasks.filter(t => t.category === category && t.source !== 'old');
                         data.priority = tasksInCategory.length;
@@ -671,7 +722,7 @@
                         
                         await batch.commit();
                     } else {
-                        const { name, ...updateData } = data; // name 필드 제거
+                        const { name, startDate, endDate, status, progress, ...updateData } = data;
                         await updateDoc(doc(db, "tasks", id), updateData);
                     }
                 } else {
@@ -974,22 +1025,44 @@
                 });
             });
 
-            DOM.taskForm.querySelectorAll('input[name="task-status"]').forEach(radio => {
-                radio.addEventListener('change', e => {
-                    const isCompleted = e.target.value === 'completed';
-                    document.getElementById('end-date-wrapper').classList.toggle('hidden', !isCompleted);
-                    if (isCompleted) {
-                        const endDateInput = document.getElementById('task-end-date');
-                        if (!endDateInput.value) endDateInput.value = formatDate(new Date());
-                    }
-                });
-            });
-
             DOM.darkModeToggle.addEventListener('click', () => {
                 const html = document.documentElement;
                 html.classList.toggle('dark');
                 localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
                 DOM.darkModeToggle.querySelector('i').className = html.classList.contains('dark') ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+            });
+            
+            // 툴팁 이벤트 리스너
+            DOM.timelineContainer.addEventListener('mouseover', e => {
+                const taskBar = e.target.closest('.timeline-task-bar');
+                if (!taskBar) return;
+                
+                const taskId = taskBar.dataset.taskId;
+                const task = state.tasks.find(t => t.id === taskId);
+                if (!task) return;
+
+                DOM.tooltip.classList.remove('hidden');
+                document.getElementById('tooltip-title').textContent = task.title;
+                document.getElementById('tooltip-assignees').textContent = (task.assignees || []).join(', ');
+            });
+
+            DOM.timelineContainer.addEventListener('mouseout', e => {
+                const taskBar = e.target.closest('.timeline-task-bar');
+                if (!taskBar) return;
+                DOM.tooltip.classList.add('hidden');
+            });
+            
+            DOM.timelineContainer.addEventListener('mousemove', e => {
+                if (!DOM.tooltip.classList.contains('hidden')) {
+                    DOM.tooltip.style.left = `${e.pageX + 15}px`;
+                    DOM.tooltip.style.top = `${e.pageY + 15}px`;
+                }
+            });
+
+            document.getElementById('add-schedule-btn').addEventListener('click', () => {
+                 const schedulesContainer = document.getElementById('schedules-container');
+                 const index = schedulesContainer.children.length;
+                 addScheduleBlock(schedulesContainer, {}, index);
             });
         };
 
@@ -1026,6 +1099,14 @@
             onSnapshot(query(collection(db, "tasks")), snapshot => {
                 newTasks = snapshot.docs.map(doc => {
                     const data = doc.data();
+                    if (!data.schedules) {
+                        data.schedules = [{
+                            startDate: data.startDate,
+                            endDate: data.endDate,
+                            status: data.status,
+                            progress: data.progress
+                        }];
+                    }
                     return { id: doc.id, source: 'new', ...data, category: data.category || '기본' };
                 });
                 tasksLoaded = true;
@@ -1035,16 +1116,20 @@
             onSnapshot(collection(db, `artifacts/${appId}/public/data/work-pages`), snapshot => {
                 oldTasks = snapshot.docs.map(doc => {
                     const data = doc.data();
+                    const schedule = {
+                        startDate: data.date,
+                        endDate: data.endDate || data.date,
+                        status: data.status || 'completed',
+                        progress: data.progress || (data.status === 'completed' ? 100 : 0)
+                    };
                     return { 
                         id: doc.id, 
                         source: 'old', 
                         category: data.category || '기본', 
                         title: data.title,
                         url: data.url,
-                        assignees: data.name ? [data.name] : [], // name을 assignees 배열로 변환
-                        startDate: data.date,
-                        status: data.status || 'completed',
-                        endDate: data.endDate || data.date,
+                        assignees: data.name ? [data.name] : [],
+                        schedules: [schedule],
                         priority: null 
                     };
                 });

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GGP CAMERA 업무 현황 보드 v1.19</title>
+    <title>GGP CAMERA 업무 현황 보드 v1.20</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -80,7 +80,7 @@
         <header class="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
             <h1 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
                 <i class="fa-solid fa-calendar-week text-indigo-500"></i>
-                <span>GGP CAMERA 업무 현황 v1.19</span>
+                <span>GGP CAMERA 업무 현황 v1.20</span>
             </h1>
             <div class="flex items-center gap-2">
                 <button id="manage-category-btn" class="flex items-center gap-2 bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
@@ -96,14 +96,7 @@
         </header>
 
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-            <div id="timeline-controls" class="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
-                <h2 id="current-range-display" class="text-lg sm:text-xl font-bold text-gray-700 dark:text-gray-200 order-first sm:order-none"></h2>
-                <div class="flex items-center gap-2">
-                    <button id="prev-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">&lt; 이전</button>
-                    <button id="today-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">오늘</button>
-                    <button id="next-btn" class="px-3 py-1 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500">다음 &gt;</button>
-                </div>
-            </div>
+            <h2 id="current-range-display" class="text-lg sm:text-xl font-bold text-gray-700 dark:text-gray-200 mb-4 text-center"></h2>
             <div id="timeline-container" class="overflow-visible">
                  <p class="initial-loading-message text-center text-gray-500 dark:text-gray-400">타임라인 로딩 중...</p>
             </div>
@@ -313,19 +306,52 @@
             const timelineGrid = document.createElement('div');
             timelineGrid.className = 'animate-fade-in';
             
-            let headerHtml = `<div class="sticky top-0 z-20 bg-gray-200 dark:bg-gray-700 grid" style="grid-template-columns: 320px 1fr;">`;
-            headerHtml += `<div class="font-semibold text-sm p-2 border-r border-b border-gray-300 dark:border-gray-600">업무</div>`;
-            headerHtml += `<div class="grid" style="grid-template-columns: repeat(${daysInRange}, minmax(0, 1fr));">`;
+            const headerContainer = document.createElement('div');
+            headerContainer.className = 'sticky top-0 z-20 group';
+
+            const headerGrid = document.createElement('div');
+            headerGrid.className = 'bg-gray-200 dark:bg-gray-700 grid relative';
+            headerGrid.style.gridTemplateColumns = '320px 1fr';
+
+            let headerGridHTML = `<div class="font-semibold text-sm p-2 border-r border-b border-gray-300 dark:border-gray-600">업무</div>`;
+            
+            let dateGridHTML = `<div class="grid" style="grid-template-columns: repeat(${daysInRange}, minmax(0, 1fr));">`;
             dateArray.forEach(d => {
                 const isToday = formatDate(d) === todayStr;
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                headerHtml += `<div class="text-center p-1 border-b border-l border-gray-300 dark:border-gray-600 ${isToday ? 'bg-indigo-600 text-white' : ''}">
+                dateGridHTML += `<div class="text-center p-1 border-b border-l border-gray-300 dark:border-gray-600 ${isToday ? 'bg-indigo-600 text-white' : ''}">
                     <div class="text-xs ${isWeekend && !isToday ? 'text-red-500' : isToday ? '' : 'text-gray-500 dark:text-gray-400'}">${d.toLocaleString('ko-KR', { weekday: 'short' })}</div>
                     <div class="font-bold text-sm">${d.getDate()}</div>
                 </div>`;
             });
-            headerHtml += `</div></div>`;
-            timelineGrid.innerHTML = headerHtml;
+            dateGridHTML += `</div>`;
+
+            headerGrid.innerHTML = headerGridHTML + dateGridHTML;
+            
+            headerContainer.appendChild(headerGrid);
+
+            const prevBtn = document.createElement('button');
+            prevBtn.id = 'sticky-prev-btn';
+            prevBtn.className = 'absolute left-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 dark:bg-gray-800/80 p-2 rounded-full shadow-lg h-8 w-8 flex items-center justify-center z-30';
+            prevBtn.innerHTML = `<i class="fa-solid fa-chevron-left"></i>`;
+
+            const todayBtn = document.createElement('button');
+            todayBtn.id = 'sticky-today-btn';
+            todayBtn.className = 'absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 dark:bg-gray-800/80 py-1 px-3 rounded-full shadow-lg text-sm z-30';
+            todayBtn.style.left = `calc(320px + (100% - 320px) / 2)`;
+            todayBtn.style.transform = 'translate(-50%, -50%)';
+            todayBtn.textContent = '오늘';
+
+            const nextBtn = document.createElement('button');
+            nextBtn.id = 'sticky-next-btn';
+            nextBtn.className = 'absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 dark:bg-gray-800/80 p-2 rounded-full shadow-lg h-8 w-8 flex items-center justify-center z-30';
+            nextBtn.innerHTML = `<i class="fa-solid fa-chevron-right"></i>`;
+
+            headerContainer.appendChild(prevBtn);
+            headerContainer.appendChild(todayBtn);
+            headerContainer.appendChild(nextBtn);
+
+            timelineGrid.appendChild(headerContainer);
 
             sortedCategories.forEach(cat => {
                 const allCategoryTasks = tasks.filter(t => t.category === cat.name);
@@ -991,17 +1017,19 @@
                 }
             });
             
-            document.getElementById('prev-btn').addEventListener('click', () => {
-                state.viewDate.setDate(state.viewDate.getDate() - 7);
-                renderAll();
-            });
-            document.getElementById('next-btn').addEventListener('click', () => {
-                state.viewDate.setDate(state.viewDate.getDate() + 7);
-                renderAll();
-            });
-            document.getElementById('today-btn').addEventListener('click', () => {
-                state.viewDate = new Date();
-                renderAll();
+            DOM.timelineContainer.addEventListener('click', e => {
+                if (e.target.closest('#sticky-prev-btn')) {
+                    state.viewDate.setDate(state.viewDate.getDate() - 7);
+                    renderAll();
+                }
+                if (e.target.closest('#sticky-next-btn')) {
+                    state.viewDate.setDate(state.viewDate.getDate() + 7);
+                    renderAll();
+                }
+                if (e.target.closest('#sticky-today-btn')) {
+                    state.viewDate = new Date();
+                    renderAll();
+                }
             });
 
             document.getElementById('manage-category-btn').addEventListener('click', () => openModal(DOM.categoryModal));
